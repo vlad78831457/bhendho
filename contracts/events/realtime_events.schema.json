@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://r-aaa-core-a.io/schemas/realtime_event.json",
+  "title": "RealtimeEvent",
+  "description": "Единый реестр realtime-событий (спека 5.7, FR-IF-4/8, ADR-23, ADR-46). Каждое событие несёт seq — сквозной номер на пользователя; клиент отбрасывает события с seq не больше применённого. task.progress эфемерен (мимо outbox), остальные — at-least-once через outbox.",
+  "type": "object",
+  "required": ["event_id", "type", "seq", "occurred_at", "payload"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "type": {
+      "enum": ["task.progress", "task.status", "task.result", "wallet.changed", "fact.changed", "system.snapshot"]
+    },
+    "seq": { "type": "integer", "minimum": 0 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "task.progress" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["task_id", "percent", "phase"],
+            "properties": {
+              "task_id": { "type": "string" },
+              "percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "phase": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "task.status" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["task_id", "status"],
+            "properties": {
+              "task_id": { "type": "string" },
+              "status": { "$ref": "https://r-aaa-core-a.io/schemas/blank_envelope.json#/$defs/taskStatus" },
+              "verdict": { "$ref": "https://r-aaa-core-a.io/schemas/blank_envelope.json#/$defs/verdict" }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "task.result" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["task_id", "result"],
+            "properties": {
+              "task_id": { "type": "string" },
+              "result": { "type": "object" }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "wallet.changed" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["wallet_id", "currency_id", "balance", "reserved", "transaction_id"],
+            "properties": {
+              "wallet_id": { "type": "string" },
+              "currency_id": { "type": "string" },
+              "balance": { "type": "string", "description": "NUMERIC(15,4) строкой — без потерь точности" },
+              "reserved": { "type": "string" },
+              "transaction_id": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "fact.changed" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["fact_id", "version", "status"],
+            "properties": {
+              "fact_id": { "type": "string" },
+              "version": { "type": "integer", "minimum": 1 },
+              "status": { "$ref": "https://r-aaa-core-a.io/schemas/blank_envelope.json#/$defs/factStatus" }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "system.snapshot" } } },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["wallets", "active_tasks"],
+            "properties": {
+              "wallets": { "type": "array", "items": { "type": "object" } },
+              "active_tasks": { "type": "array", "items": { "type": "object" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  ]
+}

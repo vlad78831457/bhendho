@@ -1,0 +1,50 @@
+{
+  "system": {
+    "document_id": "7d9f3a52-3c1e-4b8e-9a51-2f0c7e4d1a10",
+    "form_id": "taleweaver.generate_start.v1",
+    "schema_version": 1,
+    "kind": "task",
+    "status": "completed",
+    "created_at": "2026-09-28T10:00:00Z",
+    "updated_at": "2026-09-28T10:03:12Z",
+    "owner_id": "user-demo",
+    "target_service": "taleweaver",
+    "idempotency_key": "b1c2d3e4-0000-4000-8000-000000000001",
+    "locked_by": null,
+    "locked_until": null,
+    "attempts": 1
+  },
+  "meta_ui": {
+    "title": "Начать новую сказку",
+    "category": "Сказки",
+    "price_gc": 150,
+    "fields_rules": {
+      "hero": { "type": "fact_ref", "required": true, "expected_fact_kind": "taleweaver.character.v1" },
+      "mode": { "type": "select", "options": ["narrative", "interactive"], "default": "interactive" },
+      "length": { "type": "select", "options": ["super_short", "short", "medium", "long"] },
+      "language": { "type": "select", "options": ["ru", "en"] },
+      "wishes": { "type": "text" }
+    }
+  },
+  "commands": {
+    "cancel": { "status": "disabled", "reason": "Задача уже завершена" }
+  },
+  "values": {
+    "hero": "0b6c1f4e-8f0e-4a55-b2a7-3e9d1c7f2a01",
+    "mode": "interactive",
+    "length": "short",
+    "language": "ru",
+    "wishes": "про лисёнка и осенний лес"
+  },
+  "report": {
+    "verdict": "SUCCESS",
+    "user_message": "Сказка готова: 4 страницы, ждёт вашего выбора.",
+    "worker_charge": {
+      "lines": [
+        { "unit": "tokens", "units": 12400 },
+        { "unit": "images", "units": 4 },
+        { "unit": "tts_seconds", "units": 96 }
+      ]
+    }
+  }
+}

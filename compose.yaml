@@ -1,0 +1,83 @@
+name: bhendho
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-offgrid}
+      POSTGRES_USER: ${POSTGRES_USER:-offgrid}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-offgrid_dev}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  core:
+    build:
+      context: .
+      target: runtime
+    environment:
+      CORE_HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-offgrid}:${POSTGRES_PASSWORD:-offgrid_dev}@postgres:5432/${POSTGRES_DB:-offgrid}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-}            # обязателен: без него ядро не стартует
+      CORE_MODULES_DIR: ${CORE_MODULES_DIR:-}
+      CORE_WS_ORIGINS: ${CORE_WS_ORIGINS:-}
+      CORE_DEMO_DEPOSIT: ${CORE_DEMO_DEPOSIT:-false}
+      CORE_PRORAB_TOKENS: ${CORE_PRORAB_TOKENS:-}
+    ports:
+      - "${CORE_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  test:
+    build:
+      context: .
+      target: test
+    profiles: ["test"]
+    environment:
+      TEST_DATABASE_URL: postgres://${POSTGRES_USER:-offgrid}:${POSTGRES_PASSWORD:-offgrid_dev}@postgres:5432/postgres?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # e2e SDK ↔ ядро: make e2e (отдельный compose-проект, данные make up не трогаются)
+  core-e2e:
+    build:
+      context: .
+      target: runtime
+    profiles: ["e2e"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-offgrid}:${POSTGRES_PASSWORD:-offgrid_dev}@postgres:5432/${POSTGRES_DB:-offgrid}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-}
+      CORE_MODULES_DIR: /modules
+      CORE_DEMO_DEPOSIT: "true"
+    volumes:
+      - ./pkg/sdk/python/tests/e2e/module:/modules/echo:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  sdk-e2e:
+    build:
+      context: .
+      dockerfile: pkg/sdk/python/Dockerfile
+    profiles: ["e2e"]
+    environment:
+      CORE_URL: http://core-e2e:8080
+      WORKER_TOKEN: ${WORKER_TOKEN:-}
+    command: ["pytest", "-q", "-m", "e2e", "tests/e2e"]
+    depends_on:
+      - core-e2e
+
+  sdk-test:
+    build:
+      context: .
+      dockerfile: pkg/sdk/python/Dockerfile
+    profiles: ["test"]
+
+volumes:
+  pgdata:

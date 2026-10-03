@@ -1,0 +1,25 @@
+# Тестовый модуль для e2e SDK ↔ ядро: эхо-воркер с учётом в двух единицах (ADR-47).
+module_id: test/echo
+name: Echo Worker (e2e)
+version: 1.0.0
+mode: worker_service
+worker:
+  runtime: python
+  target_service: echo
+capabilities:
+  needs_llm: false
+  offline_autonomous: true
+forms_provided:
+  - form_id: echo.note.v1
+    kind: fact
+    title: Заметка
+    schema_file: forms/note.json
+  - form_id: echo.run.v1
+    kind: task
+    title: Эхо
+    schema_file: forms/run.json
+    base_price_gc: 10
+worker_accounting:
+  base_unit: {name: chars, rate_gc: 0.01}
+  extra_units:
+    - {name: calls, rate_to_base: 100}

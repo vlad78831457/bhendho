@@ -1,0 +1,22 @@
+# Секреты
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Go
+bin/
+*.test
+*.out
+coverage.*
+go.work
+go.work.sum
+
+# Python (SDK)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

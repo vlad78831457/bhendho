@@ -1,0 +1,43 @@
+# Пример паспорта модуля: Taleweaver как Python-воркер (ADR-43, ADR-45).
+# Учёт затрат — основная единица tokens + дополнительные images и tts_seconds,
+# конвертируемые в основную (ADR-47). Числа курсов — демонстрационные.
+module_id: taleweaver/story-engine
+name: Taleweaver Story Engine
+version: 0.1.0
+description: Генерация интерактивных сказок — текст, иллюстрации, озвучка.
+mode: worker_service
+worker:
+  runtime: python
+  image: r-aaa/taleweaver-worker:0.1.0
+  target_service: taleweaver
+capabilities:
+  needs_storage_buckets: [result-files]
+  needs_event_bus: true
+  needs_llm: true
+  offline_autonomous: false
+forms_provided:
+  - form_id: taleweaver.character.v1
+    kind: fact
+    title: Персонаж сказки
+    schema_file: forms/character.json
+  - form_id: taleweaver.generate_start.v1
+    kind: task
+    title: Начать новую сказку
+    schema_file: forms/generate_start.json
+    base_price_gc: 150
+  - form_id: taleweaver.generate_continue.v1
+    kind: task
+    title: Продолжить сказку после выбора
+    schema_file: forms/generate_continue.json
+    base_price_gc: 80
+worker_accounting:
+  base_unit:
+    name: tokens
+    rate_gc: 0.001
+  extra_units:
+    - name: images
+      rate_to_base: 20000
+    - name: tts_seconds
+      rate_to_base: 150
+  max_estimated_base_units: 150000
+events_published: [task.progress]
