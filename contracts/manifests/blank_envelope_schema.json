@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://r-aaa-core-a.io/schemas/blank_envelope.json",
+  "title": "BlankEnvelope",
+  "description": "Единый конверт документа (бланка) платформы OFFGRID (ADR-10, ADR-41). Статусы — раздельно для задач и фактов, вердикт — только коды реестра 5.10 (ADR-48).",
+  "type": "object",
+  "required": ["system", "meta_ui", "commands", "values"],
+  "properties": {
+    "system": {
+      "type": "object",
+      "required": ["document_id", "form_id", "schema_version", "kind", "status", "created_at"],
+      "properties": {
+        "document_id": { "type": "string", "format": "uuid" },
+        "form_id": { "type": "string", "minLength": 1 },
+        "schema_version": { "type": "integer", "minimum": 1 },
+        "kind": { "type": "string", "enum": ["fact", "task"] },
+        "status": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "owner_id": { "type": "string" },
+        "target_service": { "type": "string" },
+        "idempotency_key": { "type": "string" },
+        "locked_by": { "type": ["string", "null"] },
+        "locked_until": { "type": ["string", "null"], "format": "date-time" },
+        "attempts": { "type": "integer", "minimum": 0, "default": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "task" } } },
+          "then": { "properties": { "status": { "$ref": "#/$defs/taskStatus" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "fact" } } },
+          "then": { "properties": { "status": { "$ref": "#/$defs/factStatus" } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "meta_ui": {
+      "type": "object",
+      "required": ["title", "fields_rules"],
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "price_gc": { "type": "number", "minimum": 0 },
+        "fields_rules": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/fieldRule" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["todo", "done", "refused", "disabled"] },
+          "label": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "values": { "type": "object", "additionalProperties": true },
+    "report": {
+      "type": ["object", "null"],
+      "required": ["verdict"],
+      "properties": {
+        "verdict": { "$ref": "#/$defs/verdict" },
+        "user_message": { "type": "string" },
+        "admin_message": { "type": "string" },
+        "trace": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["step", "timestamp", "duration_ms"],
+            "properties": {
+              "step": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "duration_ms": { "type": "number", "minimum": 0 },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "worker_charge": { "$ref": "#/$defs/workerCharge" },
+        "data_gaps": { "type": "array", "items": { "type": "string" } },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "taskStatus": {
+      "description": "Статусы задачи (ADR-22, ADR-37, ADR-42, ADR-48)",
+      "enum": ["draft", "template", "pending", "processing", "completed", "failed", "cancelled"]
+    },
+    "factStatus": {
+      "description": "Статусы версии факта (ADR-15, ADR-48)",
+      "enum": ["draft", "published", "archived", "deleted"]
+    },
+    "verdict": {
+      "description": "SUCCESS либо код из единого реестра 5.10 (ADR-24, ADR-48)",
+      "enum": [
+        "SUCCESS",
+        "INSUFFICIENT_FUNDS",
+        "VALIDATION_ERROR",
+        "FACT_NOT_PUBLISHED",
+        "FACT_MISSING",
+        "FILE_MISSING",
+        "WORKER_TIMEOUT",
+        "LIMIT_EXHAUSTED",
+        "WORKER_ERROR",
+        "REPORT_INVALID",
+        "COMMAND_REFUSED",
+        "DATA_REJECTED"
+      ]
+    },
+    "workerCharge": {
+      "description": "Счёт воркера в его единицах (ADR-29, ADR-47). Воркер заполняет lines; base_units и total_gc считает бухгалтер ядра.",
+      "type": "object",
+      "required": ["lines"],
+      "properties": {
+        "lines": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["unit", "units"],
+            "properties": {
+              "unit": { "type": "string", "minLength": 1 },
+              "units": { "type": "number", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "base_units": { "type": "number", "minimum": 0 },
+        "total_gc": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "fieldRule": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "text", "int", "float", "boolean", "select", "multiselect", "date", "file", "fact_ref", "group", "list", "mix"]
+        },
+        "desc": { "type": ["string", "array"], "items": { "type": "string" } },
+        "required": { "type": "boolean", "default": false },
+        "default": {},
+        "options": { "type": "array", "items": { "type": "string" } },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "expected_fact_kind": { "type": "string" },
+        "allowed_file_types": { "type": "array", "items": { "type": "string" } },
+        "items": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/fieldRule" }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

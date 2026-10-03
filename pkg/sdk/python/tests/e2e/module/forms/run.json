@@ -1,0 +1,5 @@
+{"title": "Эхо", "category": "Тест", "fields_rules": {
+  "note":   {"type": "fact_ref", "required": true, "expected_fact_kind": "echo.note.v1"},
+  "text":   {"type": "string", "required": true, "max": 50},
+  "repeat": {"type": "int", "min": 1, "max": 10}
+}}

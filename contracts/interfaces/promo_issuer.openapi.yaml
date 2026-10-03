@@ -1,0 +1,130 @@
+openapi: 3.1.0
+info:
+  title: OFFGRID — API эмитента промокодов (служба оплаты)
+  version: 1.0.0
+  description: |
+    Служба оплаты (эмитент) принимает деньги у своего провайдера и выпускает промокоды на GC.
+    Ядро про оплату не знает: оно хранит хэш кода и один раз зачисляет сумму на кошелёк (ADR-57).
+    Доступ — токен эмитента в `Authorization: Bearer` (CORE_PROMO_ISSUERS или `core promo-issuer`).
+    Эмитент видит и гасит только свои коды.
+servers:
+  - url: https://{host}
+    variables:
+      host: {default: localhost:3000}
+security:
+  - issuerToken: []
+paths:
+  /issuer/v1/promo-codes:
+    post:
+      summary: Выпустить промокод
+      description: |
+        Повтор с тем же `external_id` не выпускает второй код: ответ 200 с уже выпущенным.
+        Если код генерировало ядро, в ответе на повтор текста кода нет (ядро его не хранит) —
+        потерянный код отзывают и выпускают заново. Свой код эмитента (`code`) возвращается всегда.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/IssueRequest"}
+      responses:
+        "201": {description: Код выпущен, content: {application/json: {schema: {$ref: "#/components/schemas/PromoCode"}}}}
+        "200": {description: Повтор заказа — код уже выпущен, content: {application/json: {schema: {$ref: "#/components/schemas/PromoCode"}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "409": {description: "`promo_conflict` — такой код уже есть или заказ выпущен с другой суммой/кодом", content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}}
+        "422": {description: "Сумма вне (0, CORE_PROMO_MAX_AMOUNT], больше 4 знаков после запятой, срок в прошлом, свой код короче 12 символов"}
+  /issuer/v1/promo-codes/{code_id}:
+    get:
+      summary: Статус кода
+      parameters: [{$ref: "#/components/parameters/CodeID"}]
+      responses:
+        "200": {description: Код, content: {application/json: {schema: {$ref: "#/components/schemas/PromoCode"}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {description: Нет такого кода у этого эмитента}
+  /issuer/v1/promo-codes/{code_id}/revoke:
+    post:
+      summary: Отозвать непогашенный код (например, возврат денег покупателю)
+      parameters: [{$ref: "#/components/parameters/CodeID"}]
+      responses:
+        "200": {description: Отозван, content: {application/json: {schema: {$ref: "#/components/schemas/PromoCode"}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {description: Нет такого кода у этого эмитента}
+        "409": {description: "`promo_not_revocable` — код уже погашен или отозван"}
+  /issuer/v1/redeem:
+    post:
+      summary: Вебхук «оплачено» — зачислить код пользователю с этим email
+      description: "Повтор вебхука безопасен — второй раз деньги не зачисляются (`already_redeemed: true`)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, user_email]
+              properties:
+                code: {type: string}
+                user_email: {type: string, format: email}
+      responses:
+        "200": {description: Зачислено, content: {application/json: {schema: {$ref: "#/components/schemas/Redemption"}}}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {description: "`not_found` — нет пользователя с таким email; `promo_invalid` — нет такого кода у эмитента, отозван или персональный для другого email"}
+        "409": {description: "`promo_used` — код погасил другой пользователь"}
+        "410": {description: "`promo_expired` — срок истёк"}
+components:
+  securitySchemes:
+    issuerToken: {type: http, scheme: bearer}
+  parameters:
+    CodeID:
+      name: code_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Unauthorized:
+      description: Нет или неверный токен эмитента
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+  schemas:
+    IssueRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: {type: string, description: "Сумма в GC, строкой, до 4 знаков после запятой: \"500\""}
+        code: {type: string, description: "Свой код эмитента: 12..64 букв и цифр (регистр, пробелы, дефисы не важны). Пусто — ядро сгенерирует XXXX-XXXX-XXXX-XXXX"}
+        external_id: {type: string, description: Номер заказа у эмитента — повтор запроса не выпускает второй код}
+        for_email: {type: string, format: email, description: Персональный код — погасить может только этот email}
+        expires_at: {type: string, format: date-time, description: Срок действия; пусто — бессрочный}
+    PromoCode:
+      type: object
+      properties:
+        code_id: {type: string, format: uuid}
+        code: {type: string, description: Текст кода — только при выпуске; ядро его не хранит}
+        amount: {type: string, example: "500.0000"}
+        currency_id: {type: string, example: GC}
+        status: {type: string, enum: [active, redeemed, revoked]}
+        external_id: {type: [string, "null"]}
+        for_email: {type: [string, "null"]}
+        expires_at: {type: [string, "null"], format: date-time}
+        created_at: {type: string, format: date-time}
+        redeemed_at: {type: [string, "null"], format: date-time}
+    Redemption:
+      type: object
+      properties:
+        code_id: {type: string, format: uuid}
+        amount: {type: string}
+        currency_id: {type: string}
+        already_redeemed: {type: boolean}
+        wallet:
+          type: object
+          properties:
+            wallet_id: {type: string}
+            currency_id: {type: string}
+            balance: {type: string}
+            reserved: {type: string}
+            available: {type: string}
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: {type: string}
+            message: {type: string}

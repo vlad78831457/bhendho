@@ -1,0 +1,197 @@
+openapi: 3.1.0
+info:
+  title: OFFGRID Worker Gateway
+  version: 0.1.0
+  description: |
+    Единственное окно обмена воркера (прораба) с ядром (ADR-18, ADR-45).
+    Прораб аутентифицируется service-токеном; его идентичность попадает в locked_by.
+    Цикл попытки: claim → accept (ETA) → heartbeat/progress → commit (ADR-30).
+    Бланк передаётся как JSON-конверт (contracts/manifests/blank_envelope_schema.json).
+servers:
+  - url: /gateway/v1
+security:
+  - serviceToken: []
+paths:
+  /claim:
+    post:
+      summary: Забрать следующую задачу своего target_service (SKIP LOCKED)
+      operationId: claim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_service, schema_versions]
+              properties:
+                target_service: { type: string }
+                schema_versions:
+                  type: array
+                  minItems: 1
+                  items: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Задача выдана — materialized-бланк с подписанными URL файлов (ADR-14)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClaimedTask" }
+        "204":
+          description: Очередь пуста
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /tasks/{task_id}/accept:
+    post:
+      summary: Принять задачу с оценкой времени либо отказаться (попытка не тратится)
+      operationId: accept
+      parameters: [{ $ref: "#/components/parameters/TaskId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accepted]
+              properties:
+                accepted: { type: boolean }
+                eta_seconds:
+                  type: integer
+                  minimum: 1
+                  description: Нет оценки — шлюз берёт среднее время сервиса (ADR-30 п.4)
+      responses:
+        "200":
+          description: Приём зафиксирован; locked_until = now + 3 × ETA (с потолком из конфига)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskState" }
+        "409": { $ref: "#/components/responses/NotOwner" }
+  /tasks/{task_id}/heartbeat:
+    post:
+      summary: Пинг «жив, работаю»
+      operationId: heartbeat
+      parameters: [{ $ref: "#/components/parameters/TaskId" }]
+      responses:
+        "200":
+          description: Текущее состояние задачи (например, cancelled — можно бросать работу)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskState" }
+        "409": { $ref: "#/components/responses/NotOwner" }
+  /tasks/{task_id}/progress:
+    post:
+      summary: Эфемерный прогресс — в БД не пишется, уходит событием task.progress (FR-FORM-4)
+      operationId: progress
+      parameters: [{ $ref: "#/components/parameters/TaskId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [percent, phase]
+              properties:
+                percent: { type: integer, minimum: 0, maximum: 100 }
+                phase: { type: string }
+      responses:
+        "202": { description: Принято к рассылке }
+        "409": { $ref: "#/components/responses/NotOwner" }
+  /tasks/{task_id}/commit:
+    post:
+      summary: Отчёт попытки — результат или ошибка (ADR-20, ADR-24)
+      description: |
+        Фиксация идёт по состоянию строки: WHERE status='processing' AND locked_by = прораб.
+        Если строка уже не в processing (повтор commit, истёк лок) — возвращается текущее
+        состояние, воркер выбрасывает свой результат. Отчёт вне схемы → REPORT_INVALID.
+      operationId: commit
+      parameters: [{ $ref: "#/components/parameters/TaskId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommitRequest" }
+      responses:
+        "200":
+          description: Итоговое состояние задачи после фиксации (или уже зафиксированное ранее)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskState" }
+  /tasks/{task_id}/files/{file_id}:
+    get:
+      summary: Байты файла из бланка задачи (ADR-60)
+      description: |
+        В снимке задачи файл — манифест {file_id, filename, size, mime}; байты прораб берёт здесь.
+        Доступ — только пока задача у этого прораба в работе и только к файлам из её снимка
+        (в том числе внутри фактов бланка, например фото персонажа). Файл, удалённый
+        пользователем, — 404: работать дальше без него.
+      operationId: taskFile
+      parameters:
+        - { $ref: "#/components/parameters/TaskId" }
+        - { name: file_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Содержимое файла (Content-Type — mime из манифеста, Cache-Control no-store)
+          content:
+            "*/*":
+              schema: { type: string, format: binary }
+        "404": { description: Файла нет в снимке задачи или он удалён }
+        "409": { $ref: "#/components/responses/NotOwner" }
+components:
+  securitySchemes:
+    serviceToken:
+      type: http
+      scheme: bearer
+  parameters:
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Unauthorized:
+      description: Неизвестный или отозванный service-токен
+    NotOwner:
+      description: Задача не у этого прораба; тело — текущее состояние
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/TaskState" }
+  schemas:
+    ClaimedTask:
+      type: object
+      required: [task_id, attempt, blank]
+      properties:
+        task_id: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1 }
+        blank:
+          $ref: "../manifests/blank_envelope_schema.json"
+        file_urls:
+          type: object
+          description: Подписанные URL на время выполнения, ключ — bucket/uuid из снимка
+          additionalProperties: { type: string, format: uri }
+    TaskState:
+      type: object
+      required: [task_id, status]
+      properties:
+        task_id: { type: string, format: uuid }
+        status:
+          $ref: "../manifests/blank_envelope_schema.json#/$defs/taskStatus"
+        verdict:
+          $ref: "../manifests/blank_envelope_schema.json#/$defs/verdict"
+        locked_until: { type: [string, "null"], format: date-time }
+        attempts: { type: integer, minimum: 0 }
+    CommitRequest:
+      type: object
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [success, error, rejected]
+          description: rejected — воркер отверг данные бланка по смыслу предметной области (DATA_REJECTED, ADR-53)
+        result:
+          type: object
+          description: outcome=success — values результата (станет факт-бланком origin=task, ADR-15)
+        report:
+          type: object
+          description: Секция report конверта; verdict ставит шлюз, воркер несёт worker_charge и свои поля
+          properties:
+            worker_charge:
+              $ref: "../manifests/blank_envelope_schema.json#/$defs/workerCharge"
+            admin_message: { type: string }
+          additionalProperties: true

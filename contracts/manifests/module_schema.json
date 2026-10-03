@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://r-aaa-core-a.io/schemas/module_manifest.json",
+  "title": "ModuleManifest",
+  "description": "Декларативный паспорт модуля ядра r-aaa-core-a (module.yaml / module.json). in_process — только Go-модули, собранные с ядром; worker_service — отдельный воркер за шлюзом (ADR-43, ADR-45).",
+  "type": "object",
+  "required": ["module_id", "name", "version", "mode", "capabilities"],
+  "properties": {
+    "module_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+(/[a-z0-9_-]+)*$",
+      "description": "Уникальный идентификатор модуля (taleweaver/story-engine, spa/procurement, core/algorithms)"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "description": { "type": "string" },
+    "author": { "type": "string" },
+    "mode": {
+      "type": "string",
+      "enum": ["in_process", "worker_service"]
+    },
+    "entry_point": {
+      "type": "string",
+      "description": "in_process: имя Go-модуля в реестре ядра"
+    },
+    "worker": {
+      "type": "object",
+      "description": "worker_service: как запускается воркер (ядро его не запускает — только описывает)",
+      "required": ["runtime", "target_service"],
+      "properties": {
+        "runtime": { "type": "string", "enum": ["python", "go"] },
+        "image": { "type": "string" },
+        "target_service": { "type": "string", "pattern": "^[a-z0-9_.-]+$" }
+      },
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "needs_storage_buckets": { "type": "array", "items": { "type": "string" } },
+        "needs_event_bus": { "type": "boolean", "default": true },
+        "needs_llm": { "type": "boolean", "default": false },
+        "offline_autonomous": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+    "forms_provided": {
+      "type": "array",
+      "description": "Шаблоны форм, регистрируемые модулем в каталоге ядра (ADR-34)",
+      "items": {
+        "type": "object",
+        "required": ["form_id", "kind", "title", "schema_file"],
+        "properties": {
+          "form_id": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*\\.v[0-9]+$" },
+          "kind": { "type": "string", "enum": ["fact", "task"] },
+          "title": { "type": "string" },
+          "schema_file": { "type": "string" },
+          "base_price_gc": { "type": "number", "minimum": 0, "default": 0 },
+          "result": {
+            "type": "object",
+            "description": "Факт-результат задачи (ADR-51): новый факт или новая версия факта из поля versions_field",
+            "required": ["fact_kind"],
+            "properties": {
+              "fact_kind": { "type": "string" },
+              "versions_field": { "type": "string" },
+              "publish": { "type": "string", "enum": ["draft", "auto"], "default": "draft" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "worker_accounting": {
+      "type": "object",
+      "description": "Единицы учёта затрат воркера (ADR-29, ADR-47): основная единица с курсом к валюте списания и дополнительные — с курсом к основной",
+      "required": ["base_unit"],
+      "properties": {
+        "base_unit": {
+          "type": "object",
+          "required": ["name", "rate_gc"],
+          "properties": {
+            "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+            "rate_gc": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "extra_units": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "rate_to_base"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+              "rate_to_base": { "type": "number", "exclusiveMinimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "max_estimated_base_units": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "events_subscribed": { "type": "array", "items": { "type": "string" } },
+    "events_published": { "type": "array", "items": { "type": "string" } }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "mode": { "const": "in_process" } } },
+      "then": { "required": ["entry_point"] }
+    },
+    {
+      "if": { "properties": { "mode": { "const": "worker_service" } } },
+      "then": { "required": ["worker"] }
+    }
+  ],
+  "additionalProperties": false
+}
