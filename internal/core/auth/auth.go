@@ -303,14 +303,15 @@ type Profile struct {
 	Email       string    `json:"email"`
 	DisplayName string    `json:"display_name"`
 	HasPassword bool      `json:"has_password"`
+	Role        string    `json:"role"` // user | tester | admin; меняется только на сервере (ADR-61)
 	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Profile возвращает профиль пользователя.
 func (s *Service) Profile(ctx context.Context, id uuid.UUID) (Profile, error) {
 	p := Profile{ID: id}
-	err := s.pool.QueryRow(ctx, `SELECT COALESCE(email, ''), display_name, password_hash IS NOT NULL, created_at FROM users WHERE id = $1`, id).
-		Scan(&p.Email, &p.DisplayName, &p.HasPassword, &p.CreatedAt)
+	err := s.pool.QueryRow(ctx, `SELECT COALESCE(email, ''), display_name, password_hash IS NOT NULL, role, created_at FROM users WHERE id = $1`, id).
+		Scan(&p.Email, &p.DisplayName, &p.HasPassword, &p.Role, &p.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrInvalidToken
 	}

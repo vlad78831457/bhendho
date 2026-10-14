@@ -76,6 +76,14 @@ func TestCabinetOverHTTP(t *testing.T) {
 	s.call("POST", "/api/v1/me/password", vk, map[string]any{"current_password": "first-password", "new_password": "second-password"}, http.StatusNoContent)
 	s.call("POST", "/api/v1/auth/login", "", map[string]any{"email": "ivan@example.org", "password": "first-password"}, http.StatusUnauthorized)
 
+	// Роль видна в профиле, но через API не меняется (ADR-61).
+	if me := s.call("GET", "/api/v1/me", vk, nil, http.StatusOK); me["role"] != "user" {
+		t.Fatalf("role in profile: %v", me)
+	}
+	if p := s.call("PATCH", "/api/v1/me", vk, map[string]any{"display_name": "Ваня", "role": "admin"}, http.StatusOK); p["role"] != "user" {
+		t.Fatalf("role changed through API: %v", p)
+	}
+
 	// Имя.
 	if p := s.call("PATCH", "/api/v1/me", vk, map[string]any{"display_name": "  Ваня  "}, http.StatusOK); p["display_name"] != "Ваня" {
 		t.Fatalf("name: %v", p)
