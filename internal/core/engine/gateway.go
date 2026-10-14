@@ -345,6 +345,9 @@ func (e *Engine) Commit(ctx context.Context, acc ServiceAccount, taskID uuid.UUI
 		for _, k := range reservedReportKeys {
 			delete(report, k)
 		}
+		// Факты подразделения (ADR-65) пользователю не показываются ни при каком исходе; хранятся только при успехе.
+		serviceFacts := report["service_facts"]
+		delete(report, "service_facts")
 
 		switch req.Outcome {
 		case "error":
@@ -353,7 +356,7 @@ func (e *Engine) Commit(ctx context.Context, acc ServiceAccount, taskID uuid.UUI
 			// Данные корректны по форме, но неприменимы по смыслу (ADR-53): retry не предлагается.
 			t, err = failTask(ctx, tx, t, codes.DataRejected, actor, adminMessage, report)
 		case "success":
-			t, err = e.settle(ctx, tx, t, acc, report, req.Result)
+			t, err = e.settle(ctx, tx, t, acc, report, req.Result, serviceFacts)
 		default:
 			t, err = failTask(ctx, tx, t, codes.ReportInvalid, actor, fmt.Sprintf("unknown outcome %q", req.Outcome), nil)
 		}
@@ -367,7 +370,7 @@ func (e *Engine) Commit(ctx context.Context, acc ServiceAccount, taskID uuid.UUI
 }
 
 // settle — processing → completed: счёт воркера в единицах → деньги (ADR-29/47).
-func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccount, report, result map[string]any) (task, error) {
+func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccount, report, result map[string]any, serviceFacts any) (task, error) {
 	actor := "prorab:" + acc.Name
 	lines, err := parseCharge(report["worker_charge"])
 	if err != nil {
@@ -389,6 +392,12 @@ func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccou
 		return t, err
 	}
 	if reject != "" {
+		return failTask(ctx, tx, t, codes.ReportInvalid, actor, reject, nil)
+	}
+	// Факты подразделения (ADR-65) — в его память.
+	if reject, err := storeServiceFacts(ctx, tx, t, acc.Name, serviceFacts); err != nil {
+		return t, err
+	} else if reject != "" {
 		return failTask(ctx, tx, t, codes.ReportInvalid, actor, reject, nil)
 	}
 	if resultFact != nil {

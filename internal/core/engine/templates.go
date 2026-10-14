@@ -82,7 +82,7 @@ func scanTemplate(row pgx.Row) (template, error) {
 // publishedTemplate — последняя опубликованная версия формы нужного вида.
 func publishedTemplate(ctx context.Context, q querier, formID, kind string) (template, error) {
 	t, err := scanTemplate(q.QueryRow(ctx, templateSelect+`
-		WHERE f.form_id = $1 AND f.kind = $2 AND f.status = 'published'
+		WHERE f.form_id = $1 AND f.kind = $2 AND f.status = 'published' AND f.audience = 'user'
 		ORDER BY f.version DESC LIMIT 1`, formID, kind))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, fmt.Errorf("form %q: %w", formID, ErrNotFound)
@@ -147,7 +147,7 @@ func (e *Engine) Catalog(ctx context.Context) ([]CatalogItem, error) {
 
 func (e *Engine) loadCatalog(ctx context.Context) ([]CatalogItem, error) {
 	rows, err := e.pool.Query(ctx, templateSelect+`
-		WHERE f.status = 'published' ORDER BY f.kind DESC, f.form_id`)
+		WHERE f.status = 'published' AND f.audience = 'user' ORDER BY f.kind DESC, f.form_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (e *Engine) loadCatalog(ctx context.Context) ([]CatalogItem, error) {
 // Template — шаблон бланка для фронта (5.7, поток 2): system + meta_ui, values пустые.
 func (e *Engine) Template(ctx context.Context, formID string) (map[string]any, error) {
 	rows, err := e.pool.Query(ctx, templateSelect+`
-		WHERE f.form_id = $1 AND f.status = 'published' ORDER BY f.version DESC LIMIT 1`, formID)
+		WHERE f.form_id = $1 AND f.status = 'published' AND f.audience = 'user' ORDER BY f.version DESC LIMIT 1`, formID)
 	if err != nil {
 		return nil, err
 	}

@@ -194,4 +194,14 @@ components:
             worker_charge:
               $ref: "../manifests/blank_envelope_schema.json#/$defs/workerCharge"
             admin_message: { type: string }
+            service_facts:
+              type: array
+              maxItems: 100
+              description: "Факты подразделения (ADR-65): бланк своего подразделения с «кому» не user и содержимое. Ядро не понимает содержимого, ставит само подразделение, версию бланка, «кому», задачу, пользователя, прораба и время; хранит только при outcome=success; пользователю в отчёте не показываются."
+              items:
+                type: object
+                required: [form_id, values]
+                properties:
+                  form_id: { type: string }
+                  values: { type: object, description: "до 256 КБ в JSON" }
           additionalProperties: true

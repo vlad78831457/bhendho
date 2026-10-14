@@ -145,6 +145,7 @@ async def test_worker_happy_path_with_charge_and_immutable_values() -> None:
         ctx.charge("tokens", 12400)
         ctx.charge("images", 4)
         ctx.charge("tokens", 100)
+        ctx.remember("tale.spend.v1", {"model": "m", "tokens": 12500})
         return Outcome(result={"pages": 4}, report={"explanation": {"formulas": ["x"]}})
 
     assert await worker(gw, handler).run_once()
@@ -156,6 +157,7 @@ async def test_worker_happy_path_with_charge_and_immutable_values() -> None:
         "report": {
             "explanation": {"formulas": ["x"]},
             "worker_charge": {"lines": [{"unit": "tokens", "units": 12500}, {"unit": "images", "units": 4}]},
+            "service_facts": [{"form_id": "tale.spend.v1", "values": {"model": "m", "tokens": 12500}}],
         },
     }
     assert ("POST", f"/tasks/{t.task_id}/progress") in gw.calls
