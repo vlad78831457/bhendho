@@ -60,6 +60,7 @@ class TaskContext:
         self._client = client
         self._claimed = claimed
         self._charge: dict[str, Decimal] = defaultdict(Decimal)
+        self._facts: list[dict[str, Any]] = []
         self._lost = asyncio.Event()
 
     @property
@@ -123,6 +124,17 @@ class TaskContext:
 
     def charge_lines(self) -> list[ChargeLine]:
         return [ChargeLine(unit=u, units=v) for u, v in self._charge.items()]
+
+    def remember(self, form_id: str, values: dict[str, Any]) -> None:
+        """Факт подразделения (ADR-65): уйдёт в память подразделения, пользователь его не увидит.
+
+        form_id — бланк этого подразделения с «кому» не user (расход, модель, промпт…).
+        Хранится только при успехе.
+        """
+        self._facts.append({"form_id": form_id, "values": dict(values)})
+
+    def service_facts(self) -> list[dict[str, Any]]:
+        return list(self._facts)
 
 
 Handler = Callable[[TaskContext], Coroutine[Any, Any, dict[str, Any] | Outcome]]
@@ -248,6 +260,9 @@ class Worker:
             return
         out = work.result()
         outcome = out if isinstance(out, Outcome) else Outcome(result=out)
+        report = dict(outcome.report or {})
+        if facts := ctx.service_facts():
+            report["service_facts"] = facts
         await self._client.commit_success(
-            ctx.task_id, outcome.result, charge=ctx.charge_lines(), report=outcome.report
+            ctx.task_id, outcome.result, charge=ctx.charge_lines(), report=report
         )

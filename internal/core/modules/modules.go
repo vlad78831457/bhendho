@@ -39,6 +39,7 @@ type FormRef struct {
 	SchemaFile string          `yaml:"schema_file"`
 	BasePrice  decimal.Decimal `yaml:"base_price_gc"`
 	Result     *ResultSpec     `yaml:"result"`
+	Audience   string          `yaml:"audience"` // ADR-65: пусто — user
 }
 
 // ResultSpec — факт-результат задачи (ADR-51).
@@ -175,4 +176,12 @@ func checkResult(ref FormRef, rules forms.Rules) error {
 		return fmt.Errorf("form %s: versions_field %q must be a fact_ref to %s", ref.FormID, r.VersionsField, r.FactKind)
 	}
 	return nil
+}
+
+// AudienceOrUser — «кому» факт формы (ADR-65); не указано — пользователю.
+func (r FormRef) AudienceOrUser() string {
+	if r.Audience == "" {
+		return "user"
+	}
+	return r.Audience
 }

@@ -10,3 +10,4 @@
 - списание сверх резерва до `резерв × CORE_OVERDRAFT_FACTOR` (1.5), запись журнала `overcharge`, минус на кошельке, в минусе задачи не создаются (ADR-63) (`task/ae-overdraft`).
 - фронт движка в `web/`: фронт по бланкам из `taleweaver-app-vr-ab` без экрана сказки, адрес `/admin/`, только для роли `admin`; `make test` гоняет `tsc` и `vitest` (ADR-64) (`task/af-web`).
 - ADR-61…64 и строки журнала — по порядку номеров после слияний (`task/ag-adr-order`).
+- факты подразделений: `audience` у формы в паспорте, `report.service_facts` в отчёте прораба, таблица `service_facts` с семью полями ядра и составным индексом, вырезаются из отчёта пользователя; SDK — `ctx.remember()` (ADR-65) (`task/ah-service-facts`).

@@ -78,14 +78,15 @@ func upsertForm(ctx context.Context, tx pgx.Tx, serviceID uuid.UUID, currency st
 		metaRaw   []byte
 		priceStr  string
 		resultRaw []byte
+		audience  string
 	)
 	var resultSpec any
 	if f.Ref.Result != nil {
 		resultSpec = f.Ref.Result
 	}
 	err := tx.QueryRow(ctx, `
-		SELECT version, meta_ui, price::text, result_spec FROM forms
-		WHERE form_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`, f.Ref.FormID).Scan(&version, &metaRaw, &priceStr, &resultRaw)
+		SELECT version, meta_ui, price::text, result_spec, audience FROM forms
+		WHERE form_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`, f.Ref.FormID).Scan(&version, &metaRaw, &priceStr, &resultRaw, &audience)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
@@ -102,7 +103,8 @@ func upsertForm(ctx context.Context, tx pgx.Tx, serviceID uuid.UUID, currency st
 		if err != nil {
 			return err
 		}
-		if reflect.DeepEqual(current, fresh) && sameResult && decimal.RequireFromString(priceStr).Equal(f.Ref.BasePrice) {
+		if reflect.DeepEqual(current, fresh) && sameResult && audience == f.Ref.AudienceOrUser() &&
+			decimal.RequireFromString(priceStr).Equal(f.Ref.BasePrice) {
 			return nil
 		}
 		if _, err := tx.Exec(ctx, `UPDATE forms SET status = 'withdrawn' WHERE form_id = $1 AND status = 'published'`, f.Ref.FormID); err != nil {
@@ -110,9 +112,9 @@ func upsertForm(ctx context.Context, tx pgx.Tx, serviceID uuid.UUID, currency st
 		}
 	}
 	_, err = tx.Exec(ctx, `
-		INSERT INTO forms (form_id, version, kind, service_id, title, meta_ui, price, currency_id, status, result_spec)
-		VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8, 'published', $9)`,
-		f.Ref.FormID, version+1, f.Ref.Kind, serviceID, f.Ref.Title, f.MetaUI, f.Ref.BasePrice.String(), currency, resultSpec)
+		INSERT INTO forms (form_id, version, kind, service_id, title, meta_ui, price, currency_id, status, result_spec, audience)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8, 'published', $9, $10)`,
+		f.Ref.FormID, version+1, f.Ref.Kind, serviceID, f.Ref.Title, f.MetaUI, f.Ref.BasePrice.String(), currency, resultSpec, f.Ref.AudienceOrUser())
 	return err
 }
 
