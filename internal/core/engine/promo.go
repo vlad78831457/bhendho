@@ -290,6 +290,17 @@ func (e *Engine) RedeemPromoFor(ctx context.Context, iss PromoIssuer, email, cod
 func (e *Engine) redeem(ctx context.Context, userID uuid.UUID, code string, issuerID *uuid.UUID) (PromoRedemption, error) {
 	var res PromoRedemption
 	err := pgx.BeginFunc(ctx, e.pool, func(tx pgx.Tx) error {
+		var err error
+		res, err = e.redeemTx(ctx, tx, userID, code, issuerID)
+		return err
+	})
+	return res, err
+}
+
+// redeemTx — погашение кода внутри чужой транзакции (её открывает redeem или RedeemPromoByMark).
+func (e *Engine) redeemTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, code string, issuerID *uuid.UUID) (PromoRedemption, error) {
+	var res PromoRedemption
+	err := func() error {
 		var (
 			id, codeIssuer   uuid.UUID
 			amount, currency string
@@ -343,6 +354,6 @@ func (e *Engine) redeem(ctx context.Context, userID uuid.UUID, code string, issu
 		_, err = tx.Exec(ctx, `UPDATE promo_codes SET status = 'redeemed', redeemed_by = $2, redeemed_at = now(), deposit_id = $3
 			WHERE id = $1`, id, userID, depositID)
 		return err
-	})
+	}()
 	return res, err
 }

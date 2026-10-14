@@ -81,6 +81,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/wallets/transactions", s.user(s.transactions))
 	mux.HandleFunc("POST /api/v1/deposits/demo", s.user(s.demoDeposit))
 	mux.HandleFunc("POST /api/v1/promo-codes/redeem", s.user(s.redeemPromo))
+	mux.HandleFunc("POST /api/v1/topup-marks", s.user(s.topupMark))
 
 	mux.HandleFunc("POST /api/v1/facts", s.user(s.createFact))
 	mux.HandleFunc("GET /api/v1/facts", s.user(s.listFacts))
