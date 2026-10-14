@@ -22,7 +22,7 @@ export function StatusBadge({ status }: { status: string }) {
   return <span className={`badge status-${status}`}>{STATUS[status] ?? status}</span>;
 }
 
-function useLoad<T>(load: () => Promise<T>, deps: unknown[]): { data: T | null; error: string | null; reload: () => void } {
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[]): { data: T | null; error: string | null; reload: () => void } {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [n, setN] = useState(0);
@@ -38,7 +38,7 @@ function useLoad<T>(load: () => Promise<T>, deps: unknown[]): { data: T | null; 
   return { data, error, reload: () => setN((x) => x + 1) };
 }
 
-function Loading({ error }: { error: string | null }) {
+export function Loading({ error }: { error: string | null }) {
   return error ? <p role="alert" className="error">Ошибка: {error}</p> : <p aria-busy="true">Загрузка…</p>;
 }
 

@@ -2,7 +2,8 @@
 // idempotency_key, команды, авторизация. Цену и схему фронт не отправляет (ADR-12).
 
 import type {
-  CatalogItem, Envelope, Fact, FileLink, Identity, Profile, Report, StoredFile, Template, Tokens, Transaction, Wallet,
+  AdminService, CatalogItem, Envelope, Fact, FileLink, Identity, Profile, Report, ServiceFact, StoredFile, Template, Tokens,
+  Transaction, Wallet,
 } from "./types";
 
 const TOKENS_KEY = "offgrid.tokens";
@@ -178,6 +179,17 @@ export class Api {
   transactions = () =>
     this.request<{ items: Transaction[] }>("GET", "/api/v1/wallets/transactions?limit=50").then((r) => r.items);
   demoDeposit = (amount: number) => this.request<Wallet>("POST", "/api/v1/deposits/demo", { amount });
+
+  // Панель админа (ADR-66), только роль admin.
+  adminServices = () => this.request<{ items: AdminService[] }>("GET", "/api/v1/admin/services").then((r) => r.items);
+  adminFacts = (service: string, formId: string, limit = 100) =>
+    this.request<{ items: ServiceFact[] }>(
+      "GET",
+      `/api/v1/admin/services/${encodeURIComponent(service)}/facts?form_id=${encodeURIComponent(formId)}&limit=${limit}`,
+    ).then((r) => r.items);
+  adminWriteFact = (service: string, formId: string, values: Record<string, unknown>) =>
+    this.request<ServiceFact>("POST", `/api/v1/admin/services/${encodeURIComponent(service)}/facts`, { form_id: formId, values });
+  adminSettings = () => this.request<Record<string, unknown>>("GET", "/api/v1/admin/settings");
   /** Промокод службы оплаты (ADR-57): зачисление один раз; повтор того же пользователя — already_redeemed. */
   redeemPromo = (code: string) =>
     this.request<{ code_id: string; amount: string; currency_id: string; already_redeemed: boolean; wallet: Wallet }>(

@@ -173,3 +173,38 @@ export interface RealtimeEvent {
   occurred_at: string;
   payload: Record<string, unknown>;
 }
+
+/** Бланк подразделения в обзоре админа (ADR-66). */
+export interface AdminForm {
+  form_id: string;
+  version: number;
+  kind: "fact" | "task";
+  /** «Кому» (ADR-65): user — пользователю, иначе — память подразделения. */
+  audience: string;
+  title: string;
+  price: string;
+  fields?: Rules;
+}
+
+export interface AdminService {
+  code: string;
+  title: string;
+  module_id: string;
+  module_version: string;
+  forms: AdminForm[];
+}
+
+/** Факт подразделения: семь полей ядра и содержимое, которое ядро не понимает. */
+export interface ServiceFact {
+  id: number;
+  service: string;
+  form_id: string;
+  schema_version: number;
+  audience: string;
+  task_id: string | null;
+  user_id: string | null;
+  /** prorab:<имя> или admin:<id> */
+  writer: string;
+  created_at: string;
+  values: Record<string, unknown>;
+}
