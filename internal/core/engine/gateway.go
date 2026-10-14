@@ -373,7 +373,7 @@ func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccou
 	if err != nil {
 		return failTask(ctx, tx, t, codes.ReportInvalid, actor, err.Error(), nil)
 	}
-	bill, err := money.Settle(lines, t.Rates, t.Reserved)
+	bill, err := money.Settle(lines, t.Rates, t.Reserved, decimal.RequireFromString(e.cfg.OverdraftFactor))
 	if err != nil {
 		return failTask(ctx, tx, t, codes.ReportInvalid, actor, err.Error(), nil)
 	}
@@ -417,16 +417,23 @@ func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccou
 	if t.Rates != nil {
 		rates = t.Rates
 	}
-	chargeTx, err := record(ctx, tx, journal{WalletID: userW.ID, Type: "charge", Amount: bill.Charged,
+	// charge — из резерва; overcharge — сверх резерва, из баланса (ADR-63). Сервису — всё одной записью.
+	chargeTx, err := record(ctx, tx, journal{WalletID: userW.ID, Type: "charge", Amount: bill.Charged.Sub(bill.Over),
 		Counterparty: &serviceW.ID, TaskID: &id, Units: units, Rates: rates})
 	if err != nil {
 		return t, err
+	}
+	lastTx := chargeTx
+	if bill.Over.IsPositive() {
+		if lastTx, err = record(ctx, tx, journal{WalletID: userW.ID, Type: "overcharge", Amount: bill.Over,
+			Counterparty: &serviceW.ID, TaskID: &id}); err != nil {
+			return t, err
+		}
 	}
 	if _, err := record(ctx, tx, journal{WalletID: serviceW.ID, Type: "income", Amount: bill.Charged,
 		Counterparty: &userW.ID, TaskID: &id}); err != nil {
 		return t, err
 	}
-	lastTx := chargeTx
 	if bill.Released.IsPositive() {
 		if lastTx, err = record(ctx, tx, journal{WalletID: userW.ID, Type: "release", Amount: bill.Released, TaskID: &id}); err != nil {
 			return t, err
@@ -461,7 +468,7 @@ func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccou
 	}
 	if err := trace(ctx, tx, t.ID, "commit", actor, codes.Success, map[string]any{
 		"base_units": bill.BaseUnits.String(), "total": bill.Total.String(),
-		"charged": bill.Charged.String(), "released": bill.Released.String(),
+		"charged": bill.Charged.String(), "released": bill.Released.String(), "over": bill.Over.String(),
 	}); err != nil {
 		return t, err
 	}

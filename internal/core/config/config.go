@@ -54,6 +54,10 @@ type Config struct {
 	DemoDepositEnabled bool
 	DemoDepositMax     string
 
+	// OverdraftFactor — крышка списания в долях резерва (ADR-63): прораб может списать до резерв × множитель,
+	// кошелёк уходит в минус. 1 — не больше резерва. Решение директора — 1.5.
+	OverdraftFactor string
+
 	// Промокоды (ADR-57): эмитенты «имя:токен» (CORE_PROMO_ISSUERS), предел суммы кода,
 	// сколько неверных кодов пользователь может ввести за окно.
 	PromoIssuers       []string
@@ -108,6 +112,7 @@ func FromEnv() (Config, error) {
 		ProrabTokens:        list("CORE_PRORAB_TOKENS"),
 		DemoDepositEnabled:  str("CORE_DEMO_DEPOSIT", "false") == "true",
 		DemoDepositMax:      str("CORE_DEMO_DEPOSIT_MAX", "10000"),
+		OverdraftFactor:     str("CORE_OVERDRAFT_FACTOR", "1.5"),
 		PromoIssuers:        list("CORE_PROMO_ISSUERS"),
 		PromoMaxAmount:      str("CORE_PROMO_MAX_AMOUNT", "100000"),
 		PromoMaxFailures:    num("CORE_PROMO_MAX_FAILURES", 10),
@@ -125,6 +130,9 @@ func FromEnv() (Config, error) {
 		ImageMaxSide:        num("CORE_IMAGE_MAX_SIDE", 1024),
 		FileLinkTTL:         dur("CORE_FILE_LINK_TTL", 15*time.Minute),
 		FileMaxPerUser:      num("CORE_FILE_MAX_PER_USER", 300),
+	}
+	if f, err := strconv.ParseFloat(c.OverdraftFactor, 64); err != nil || f < 1 {
+		return c, fmt.Errorf("CORE_OVERDRAFT_FACTOR must be a number >= 1")
 	}
 	if c.DatabaseURL == "" {
 		return c, fmt.Errorf("DATABASE_URL is required")
@@ -157,6 +165,7 @@ func ForTests(dbURL string) Config {
 		WSPingInterval:     15 * time.Second,
 		DemoDepositEnabled: true,
 		DemoDepositMax:     "10000",
+		OverdraftFactor:    "1.5",
 		PromoMaxAmount:     "100000",
 		PromoMaxFailures:   10,
 		PromoFailureWindow: 15 * time.Minute,
