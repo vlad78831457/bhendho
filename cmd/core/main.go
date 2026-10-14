@@ -60,8 +60,10 @@ func main() {
 		err = promoIssuer(ctx, args)
 	case "promo-codes":
 		err = promoCodes(ctx, args)
+	case "user-role":
+		err = userRole(ctx, args)
 	default:
-		err = fmt.Errorf("unknown command %q (serve | migrate | issue-token | promo-issuer | promo-codes)", cmd)
+		err = fmt.Errorf("unknown command %q (serve | migrate | issue-token | promo-issuer | promo-codes | user-role)", cmd)
 	}
 	if err != nil {
 		log.Error("core stopped", "cmd", cmd, "err", err)
@@ -280,6 +282,39 @@ func promoCodes(ctx context.Context, args []string) error {
 			}
 			fmt.Printf("%s\t%s %s\n", p.Code, p.Amount, p.CurrencyID)
 		}
+		return nil
+	})
+}
+
+// userRole — роль пользователя (ADR-61): только отсюда, через API роль не меняется.
+// Без --role печатает текущую роль.
+func userRole(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("user-role", flag.ContinueOnError)
+	user := fs.String("user", "", "email или id пользователя")
+	role := fs.String("role", "", "user | tester | admin; пусто — показать текущую")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *user == "" {
+		return errors.New("--user is required")
+	}
+	if *role != "" && !auth.ValidRole(*role) {
+		return auth.ErrBadRole
+	}
+	return withDB(ctx, func(cfg config.Config, pool *pgxpool.Pool) error {
+		svc := auth.New(pool, cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL)
+		id, err := svc.FindUser(ctx, *user)
+		if err != nil {
+			return err
+		}
+		p, err := svc.Profile(ctx, id)
+		if *role != "" {
+			p, err = svc.SetRole(ctx, id, *role)
+		}
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s\t%s\t%s\n", p.ID, p.Email, p.Role)
 		return nil
 	})
 }
