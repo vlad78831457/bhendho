@@ -65,3 +65,13 @@ func (s *Service) SetRole(ctx context.Context, userID uuid.UUID, role string) (P
 	}
 	return s.Profile(ctx, userID)
 }
+
+// Role — роль пользователя.
+func (s *Service) Role(ctx context.Context, userID uuid.UUID) (string, error) {
+	var role string
+	err := s.pool.QueryRow(ctx, `SELECT role FROM users WHERE id = $1`, userID).Scan(&role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrUserNotFound
+	}
+	return role, err
+}
