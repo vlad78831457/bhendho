@@ -13,14 +13,15 @@
 | `internal/core` | ядро: auth (пароль, JWT, OAuth/OIDC, VK ID, кабинет), engine (задачи, факты, кошельки, промокоды, файлы), очередь и шлюз прорабов, realtime (WebSocket), миграции Postgres |
 | `contracts/` | языконезависимые контракты: манифест модуля, конверт бланка, события realtime, OpenAPI шлюза прорабов и эмитента промокодов |
 | `pkg/sdk/python` | Python SDK прораба (`offgrid_worker`) |
+| `web/` | фронт движка: фронт по бланкам, дальше — панель админа; только для роли `admin` (ADR-64) |
 | `docs/` | спецификация ядра, история решений ADR-01…ADR-60, вход через OAuth, промокоды |
 
-Стек: Go 1.25, Postgres 17, pgx, JWT, coder/websocket; SDK — Python 3, Pydantic v2, httpx.
+Стек: Go 1.25, Postgres 17, pgx, JWT, coder/websocket; SDK — Python 3, Pydantic v2, httpx; фронт — TypeScript, React, Vite.
 
 ## Команды
 
 ```
-make test     # gofmt, go vet, go test против Postgres + тесты SDK (Docker)
+make test     # gofmt, go vet, go test против Postgres + тесты SDK + фронт (Docker)
 make e2e      # Python SDK против живого ядра
 make up       # ядро и Postgres; сначала: cp .env.example .env и задать JWT_SECRET
 ```
