@@ -24,6 +24,8 @@
 make test     # gofmt, go vet, go test против Postgres + тесты SDK + фронт (Docker)
 make e2e      # Python SDK против живого ядра
 make up       # ядро и Postgres; сначала: cp .env.example .env и задать JWT_SECRET
+
+docker compose exec core /core user-role --user admin@example.org --role admin   # роль: user | tester | admin (ADR-61)
 ```
 
 ## Откуда код

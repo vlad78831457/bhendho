@@ -23,7 +23,7 @@ func TestSettleMultiUnit(t *testing.T) {
 		{Unit: "tokens", Units: d("12400")},
 		{Unit: "images", Units: d("4")},
 		{Unit: "tts_seconds", Units: d("96")},
-	}, taleweaver(), d("150"))
+	}, taleweaver(), d("150"), d("1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,36 +37,64 @@ func TestSettleMultiUnit(t *testing.T) {
 }
 
 func TestSettleCappedByReserve(t *testing.T) {
-	bill, err := Settle([]Line{{Unit: "images", Units: d("100")}}, taleweaver(), d("150"))
+	bill, err := Settle([]Line{{Unit: "images", Units: d("100")}}, taleweaver(), d("150"), d("1"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bill.Total.Equal(d("2000")) || !bill.Charged.Equal(d("150")) || !bill.Released.IsZero() {
+	if !bill.Total.Equal(d("2000")) || !bill.Charged.Equal(d("150")) || !bill.Released.IsZero() || !bill.Over.IsZero() {
 		t.Fatalf("bill = %+v", bill)
 	}
 }
 
+// ADR-63: до полутора резервов; сверх резерва — Over, резерв не возвращается.
+func TestSettleOverdraftFactor(t *testing.T) {
+	// 180 GC при резерве 150 и множителе 1.5: списано всё, 30 — сверх резерва.
+	bill, err := Settle([]Line{{Unit: "images", Units: d("9")}}, taleweaver(), d("150"), d("1.5"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bill.Charged.Equal(d("180")) || !bill.Over.Equal(d("30")) || !bill.Released.IsZero() {
+		t.Fatalf("within factor: %+v", bill)
+	}
+	// 2000 GC — упирается в крышку 225.
+	bill, err = Settle([]Line{{Unit: "images", Units: d("100")}}, taleweaver(), d("150"), d("1.5"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bill.Charged.Equal(d("225")) || !bill.Over.Equal(d("75")) || !bill.Released.IsZero() {
+		t.Fatalf("capped: %+v", bill)
+	}
+	// Меньше резерва — как раньше: остаток возвращается, сверх резерва ничего.
+	bill, err = Settle([]Line{{Unit: "tokens", Units: d("100000")}}, taleweaver(), d("150"), d("1.5"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bill.Charged.Equal(d("100")) || !bill.Released.Equal(d("50")) || !bill.Over.IsZero() {
+		t.Fatalf("under reserve: %+v", bill)
+	}
+}
+
 func TestSettleFixedPrice(t *testing.T) {
-	bill, err := Settle(nil, nil, d("25"))
+	bill, err := Settle(nil, nil, d("25"), d("1.5"))
 	if err != nil || !bill.Charged.Equal(d("25")) || !bill.Released.IsZero() {
 		t.Fatalf("bill = %+v err = %v", bill, err)
 	}
 }
 
 func TestSettleRejects(t *testing.T) {
-	if _, err := Settle([]Line{{Unit: "gpu_seconds", Units: d("1")}}, taleweaver(), d("10")); !errors.Is(err, ErrUnknownUnit) {
+	if _, err := Settle([]Line{{Unit: "gpu_seconds", Units: d("1")}}, taleweaver(), d("10"), d("1")); !errors.Is(err, ErrUnknownUnit) {
 		t.Errorf("unknown unit: err = %v", err)
 	}
-	if _, err := Settle([]Line{{Unit: "tokens", Units: d("-1")}}, taleweaver(), d("10")); err == nil {
+	if _, err := Settle([]Line{{Unit: "tokens", Units: d("-1")}}, taleweaver(), d("10"), d("1")); err == nil {
 		t.Error("negative units must be rejected")
 	}
-	if _, err := Settle(nil, taleweaver(), d("10")); err == nil {
+	if _, err := Settle(nil, taleweaver(), d("10"), d("1")); err == nil {
 		t.Error("metered service without charge must be rejected")
 	}
 }
 
 func TestSettleRoundsToMoneyScale(t *testing.T) {
-	bill, err := Settle([]Line{{Unit: "tokens", Units: d("1")}}, &Rates{BaseUnit: "tokens", RateGC: d("0.00001")}, d("1"))
+	bill, err := Settle([]Line{{Unit: "tokens", Units: d("1")}}, &Rates{BaseUnit: "tokens", RateGC: d("0.00001")}, d("1"), d("1"))
 	if err != nil {
 		t.Fatal(err)
 	}

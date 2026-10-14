@@ -153,7 +153,7 @@ func (s *env) checkMoney() {
 		LEFT JOIN LATERAL (
 			SELECT
 				COALESCE(sum(amount) FILTER (WHERE type IN ('deposit', 'income')), 0)
-				  - COALESCE(sum(amount) FILTER (WHERE type = 'charge'), 0) AS balance,
+				  - COALESCE(sum(amount) FILTER (WHERE type IN ('charge', 'overcharge')), 0) AS balance,
 				COALESCE(sum(amount) FILTER (WHERE type = 'reserve'), 0)
 				  - COALESCE(sum(amount) FILTER (WHERE type IN ('release', 'charge')), 0) AS reserved
 			FROM transactions t WHERE t.wallet_id = w.id) j ON TRUE
