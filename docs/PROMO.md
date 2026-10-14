@@ -83,6 +83,19 @@ docker compose exec core /core promo-codes --amount 1000 --email tester@mail.ru 
      -d '{"code": "K7PQ-M3XA-9FDE-TW2H", "user_email": "buyer@mail.ru"}'
    ```
 
+   Лучше — по метке «Пополнить» (ADR-62): у вошедших через VK email может не быть. Фронт берёт у ядра
+   метку (`POST /api/v1/topup-marks` с токеном пользователя → `{"mark": "tm_…", "expires_at": …}`, срок —
+   `CORE_TOPUP_MARK_TTL`, по умолчанию 2 часа) и передаёт её службе оплаты вместе с покупкой. Служба
+   хранит метку у заказа и после оплаты гасит код по ней:
+
+   ```bash
+   curl -s https://<домен>/issuer/v1/redeem -H "Authorization: Bearer $TOKEN" \
+     -d '{"code": "K7PQ-M3XA-9FDE-TW2H", "user_mark": "tm_…"}'
+   ```
+
+   Метка привязывается к первому погашенному коду: повтор того же вебхука безопасен и после срока метки,
+   другой код по той же метке не пройдёт (`409 mark_used`).
+
 4. Возврат денег до погашения — `POST /issuer/v1/promo-codes/<code_id>/revoke`. Статус — `GET /issuer/v1/promo-codes/<code_id>`.
 
 Повторы безопасны: тот же `external_id` не выпустит второй код, повтор вебхука не зачислит дважды.

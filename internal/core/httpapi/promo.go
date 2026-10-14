@@ -43,6 +43,12 @@ func (s *Server) promoFail(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "promo_conflict", "this code or external_id is already issued with other data")
 	case errors.Is(err, engine.ErrPromoNotRevocable):
 		writeError(w, http.StatusConflict, "promo_not_revocable", "only an active promo code can be revoked")
+	case errors.Is(err, engine.ErrMarkInvalid):
+		writeError(w, http.StatusNotFound, "mark_invalid", "top-up mark is not valid")
+	case errors.Is(err, engine.ErrMarkUsed):
+		writeError(w, http.StatusConflict, "mark_used", "top-up mark already used for another code")
+	case errors.Is(err, engine.ErrMarkExpired):
+		writeError(w, http.StatusGone, "mark_expired", "top-up mark expired")
 	default:
 		s.fail(w, err)
 	}
@@ -119,14 +125,34 @@ func (s *Server) issuerRedeem(w http.ResponseWriter, r *http.Request, iss engine
 	var req struct {
 		Code      string `json:"code"`
 		UserEmail string `json:"user_email"`
+		UserMark  string `json:"user_mark"` // ADR-62: метка «Пополнить» вместо email
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	res, err := s.eng.RedeemPromoFor(r.Context(), iss, req.UserEmail, req.Code)
+	if (req.UserEmail == "") == (req.UserMark == "") {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_input", "exactly one of user_email and user_mark is required")
+		return
+	}
+	redeem := s.eng.RedeemPromoFor
+	user := req.UserEmail
+	if req.UserMark != "" {
+		redeem, user = s.eng.RedeemPromoByMark, req.UserMark
+	}
+	res, err := redeem(r.Context(), iss, user, req.Code)
 	if err != nil {
 		s.promoFail(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// topupMark — метка для кнопки «Пополнить» (ADR-62): фронт уносит её в службу оплаты.
+func (s *Server) topupMark(w http.ResponseWriter, r *http.Request, u uuid.UUID) {
+	m, err := s.eng.IssueTopupMark(r.Context(), u)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, m)
 }

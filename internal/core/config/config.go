@@ -60,6 +60,8 @@ type Config struct {
 	PromoMaxAmount     string
 	PromoMaxFailures   int
 	PromoFailureWindow time.Duration
+	// TopupMarkTTL — срок метки «Пополнить» (ADR-62): за это время покупатель должен оплатить.
+	TopupMarkTTL time.Duration
 
 	// Вход через внешние аккаунты (ADR-58). PublicURL — адрес сайта снаружи (из него адрес возврата
 	// от провайдера: PublicURL + /api/v1/auth/oauth/<id>/callback). Провайдер без client id выключен.
@@ -112,6 +114,7 @@ func FromEnv() (Config, error) {
 		PromoMaxAmount:      str("CORE_PROMO_MAX_AMOUNT", "100000"),
 		PromoMaxFailures:    num("CORE_PROMO_MAX_FAILURES", 10),
 		PromoFailureWindow:  dur("CORE_PROMO_FAILURE_WINDOW", 15*time.Minute),
+		TopupMarkTTL:        dur("CORE_TOPUP_MARK_TTL", 2*time.Hour),
 		PublicURL:           strings.TrimRight(str("CORE_PUBLIC_URL", ""), "/"),
 		GoogleClientID:      str("CORE_OAUTH_GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  str("CORE_OAUTH_GOOGLE_CLIENT_SECRET", ""),
@@ -160,6 +163,7 @@ func ForTests(dbURL string) Config {
 		PromoMaxAmount:     "100000",
 		PromoMaxFailures:   10,
 		PromoFailureWindow: 15 * time.Minute,
+		TopupMarkTTL:       time.Hour,
 		FileMaxBytes:       15 << 20,
 		ImageMaxSide:       1024,
 		FileLinkTTL:        15 * time.Minute,
