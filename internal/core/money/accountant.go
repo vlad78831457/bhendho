@@ -1,5 +1,5 @@
 // Package money — системный бухгалтер (ADR-29, ADR-47): переводит счёт воркера
-// из его единиц в основную единицу и в валюту списания, с крышкой по резерву.
+// из его единиц в основную единицу и в валюту списания, с крышкой в долях резерва (ADR-63).
 package money
 
 import (
@@ -29,15 +29,17 @@ type Line struct {
 type Bill struct {
 	BaseUnits decimal.Decimal // Σ units × rate_to_base
 	Total     decimal.Decimal // base_units × rate_gc (факт)
-	Charged   decimal.Decimal // min(факт, резерв)
-	Released  decimal.Decimal // резерв − списано
+	Charged   decimal.Decimal // min(факт, резерв × множитель)
+	Released  decimal.Decimal // резерв − списано, если списано меньше резерва
+	Over      decimal.Decimal // списано сверх резерва (ADR-63)
 }
 
 // ErrUnknownUnit — единица не объявлена в манифесте → REPORT_INVALID.
 var ErrUnknownUnit = errors.New("unknown worker unit")
 
 // Settle считает счёт. rates == nil — фиксированная цена: факт = резерв (ADR-29 п.7).
-func Settle(lines []Line, rates *Rates, reserve decimal.Decimal) (Bill, error) {
+// factor — крышка списания в долях резерва (ADR-63): 1 — не больше резерва, 1.5 — до полутора резервов.
+func Settle(lines []Line, rates *Rates, reserve, factor decimal.Decimal) (Bill, error) {
 	if rates == nil {
 		return Bill{Total: reserve, Charged: reserve, Released: decimal.Zero}, nil
 	}
@@ -56,12 +58,13 @@ func Settle(lines []Line, rates *Rates, reserve decimal.Decimal) (Bill, error) {
 		base = base.Add(l.Units.Mul(k))
 	}
 	total := base.Mul(rates.RateGC).Round(Scale)
-	charged := decimal.Min(total, reserve)
+	charged := decimal.Min(total, reserve.Mul(factor).Round(Scale))
 	return Bill{
 		BaseUnits: base,
 		Total:     total,
 		Charged:   charged,
-		Released:  reserve.Sub(charged),
+		Released:  decimal.Max(reserve.Sub(charged), decimal.Zero),
+		Over:      decimal.Max(charged.Sub(reserve), decimal.Zero),
 	}, nil
 }
 

@@ -218,7 +218,8 @@ func (e *Engine) insertTask(ctx context.Context, tx pgx.Tx, n newTask) (task, er
 	if err != nil {
 		return task{}, err
 	}
-	if w.available().LessThan(tpl.Price) {
+	// В минусе (ADR-63) не берём ни платных, ни бесплатных задач.
+	if w.available().LessThan(tpl.Price) || w.available().IsNegative() {
 		return task{}, refuse(codes.InsufficientFunds, "need %s, available %s", tpl.Price.StringFixed(4), w.available().StringFixed(4))
 	}
 
