@@ -79,5 +79,12 @@ services:
       dockerfile: pkg/sdk/python/Dockerfile
     profiles: ["test"]
 
+  # Фронт движка (ADR-64): tsc + vitest
+  web-test:
+    build:
+      context: web
+      target: test
+    profiles: ["test"]
+
 volumes:
   pgdata:

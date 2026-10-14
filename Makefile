@@ -13,9 +13,10 @@ up: ## ядро и Postgres в фоне (нужен JWT_SECRET в .env)
 down: ## остановить
 	docker compose down
 
-test: ## gofmt, go vet, go test против Postgres + тесты Python SDK
+test: ## gofmt, go vet, go test против Postgres + тесты Python SDK + фронт (tsc, vitest)
 	docker compose run --rm --build test
 	docker compose run --rm --build sdk-test
+	docker compose run --rm --build web-test
 
 e2e: ## Python SDK против живого ядра (отдельный compose-проект)
 	./scripts/e2e.sh
