@@ -18,6 +18,7 @@ import (
 
 	"offgrid/core/internal/core/codes"
 	"offgrid/core/internal/core/config"
+	"offgrid/core/internal/core/contracts"
 	"offgrid/core/internal/core/forms"
 )
 
@@ -33,7 +34,8 @@ type Engine struct {
 	notifier Notifier
 	now      func() time.Time
 	catalog  catalogCache
-	files    *fileStore // nil — хранилище файлов не настроено
+	files    *fileStore           // nil — хранилище файлов не настроено
+	schemas  *contracts.Validator // nil — подразделения не регистрируются по сети (ADR-70)
 }
 
 // New создаёт ядро. notifier может быть nil (прогресс тогда не рассылается).

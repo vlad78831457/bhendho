@@ -31,6 +31,7 @@ type AdminService struct {
 	Title         string      `json:"title"`
 	ModuleID      string      `json:"module_id"`
 	ModuleVersion string      `json:"module_version"`
+	Enabled       bool        `json:"enabled"`
 	Accounting    any         `json:"accounting,omitempty"`
 	Forms         []AdminForm `json:"forms"`
 }
@@ -38,7 +39,7 @@ type AdminService struct {
 // AdminServices — все подразделения и их бланки (схема бланков для админа).
 func (e *Engine) AdminServices(ctx context.Context) ([]AdminService, error) {
 	rows, err := e.pool.Query(ctx, `
-		SELECT s.code, s.title, s.module_id, s.module_version, s.accounting,
+		SELECT s.code, s.title, s.module_id, s.module_version, s.enabled, s.accounting,
 		       f.form_id, f.version, f.kind, f.audience, f.title, f.price::text, f.meta_ui
 		FROM services s LEFT JOIN forms f ON f.service_id = s.id AND f.status = 'published'
 		ORDER BY s.code, f.kind DESC, f.form_id`)
@@ -54,7 +55,7 @@ func (e *Engine) AdminServices(ctx context.Context) ([]AdminService, error) {
 			formID, kind, audience, title, price *string
 			version                              *int
 		)
-		if err := rows.Scan(&svc.Code, &svc.Title, &svc.ModuleID, &svc.ModuleVersion, &accounting,
+		if err := rows.Scan(&svc.Code, &svc.Title, &svc.ModuleID, &svc.ModuleVersion, &svc.Enabled, &accounting,
 			&formID, &version, &kind, &audience, &title, &price, &meta); err != nil {
 			return nil, err
 		}

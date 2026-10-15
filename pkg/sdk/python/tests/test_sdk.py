@@ -327,3 +327,17 @@ async def test_task_files_download_missing_and_lost() -> None:
         ctx = TaskContext(c, claimed)
         assert await ctx.file("photo-1") is None
         assert ctx.lost
+
+
+async def test_register_sends_passport_and_forms(tmp_path: Path) -> None:
+    (tmp_path / "forms").mkdir()
+    (tmp_path / "module.yaml").write_text("module_id: test/x\n", encoding="utf-8")
+    (tmp_path / "forms" / "run.json").write_text('{"title": "Эхо"}', encoding="utf-8")
+    gw = FakeGateway()
+    async with client(gw) as c:
+        out = await c.register(tmp_path)
+    assert out["service"] == "tale"
+    assert gw.registered == {
+        "module_yaml": "module_id: test/x\n",
+        "files": {"forms/run.json": '{"title": "Эхо"}'},
+    }

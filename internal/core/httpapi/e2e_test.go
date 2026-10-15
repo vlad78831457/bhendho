@@ -52,7 +52,7 @@ func newStack(t *testing.T) *stack {
 		t.Fatal(err)
 	}
 	hub := realtime.NewHub(pool, cfg.WSPingInterval, nil, log)
-	eng := engine.New(pool, cfg, hub)
+	eng := engine.New(pool, cfg, hub).WithContracts(v)
 	eng.WithFiles(files.Local{Dir: t.TempDir()})
 
 	// Эталонный манифест Taleweaver из contracts/ + формы для теста.

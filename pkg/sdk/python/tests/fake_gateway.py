@@ -27,6 +27,7 @@ class FakeGateway:
     tasks: list[FakeTask] = field(default_factory=list)
     calls: list[tuple[str, str]] = field(default_factory=list)
     fail_next: int = 0  # сколько следующих запросов ответить 503
+    registered: dict[str, Any] | None = None
     lose_on_heartbeat: bool = False
     files: dict[str, bytes] = field(default_factory=dict)  # файлы из снимков задач (ADR-60)
 
@@ -83,6 +84,9 @@ class FakeGateway:
             return httpx.Response(503, text="unavailable")
         body = json.loads(req.content) if req.content else {}
 
+        if path == "/register":
+            self.registered = body
+            return httpx.Response(200, json={"service": self.service, "forms": ["x"]})
         if path == "/claim":
             for t in self.tasks:
                 if t.status == "pending":
