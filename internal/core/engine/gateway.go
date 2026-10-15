@@ -382,7 +382,11 @@ func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccou
 	if err != nil {
 		return failTask(ctx, tx, t, codes.ReportInvalid, actor, err.Error(), nil)
 	}
-	bill, err := money.Settle(lines, t.Rates, t.Reserved, decimal.RequireFromString(e.cfg.OverdraftFactor))
+	factor := decimal.RequireFromString(e.cfg.OverdraftFactor)
+	if t.Rates != nil && t.Rates.Overdraft != nil {
+		factor = *t.Rates.Overdraft // действовавший при создании задачи (ADR-69)
+	}
+	bill, err := money.Settle(lines, t.Rates, t.Reserved, factor)
 	if err != nil {
 		return failTask(ctx, tx, t, codes.ReportInvalid, actor, err.Error(), nil)
 	}

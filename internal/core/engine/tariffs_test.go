@@ -1,0 +1,115 @@
+package engine
+
+import (
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+
+	"offgrid/core/internal/core/codes"
+)
+
+func dec(s string) *decimal.Decimal { d := decimal.RequireFromString(s); return &d }
+
+func (s *env) reserved(id uuid.UUID) string {
+	s.t.Helper()
+	var r string
+	must(s.t, s.e.pool.QueryRow(s.ctx, `SELECT reserved::text FROM system_tasks WHERE id = $1`, id).Scan(&r))
+	return r
+}
+
+// ADR-69: тарифы меняются без перезапуска; задача помнит цену, курсы и множитель, действовавшие при создании.
+func TestTariffsApplyToNewTasksOnly(t *testing.T) {
+	s := setup(t)
+	admin := uuid.New()
+	u := s.user("1000")
+	hero := s.hero(u, true)
+
+	before, err := s.create(u, hero, "before")
+	must(t, err)
+	must(t, s.e.SetTariff(s.ctx, admin, "form_price", "tale.start.v1", dec("200")))
+	must(t, s.e.SetTariff(s.ctx, admin, "unit_rate", "tale:images", dec("10000"))) // картинка: 20 → 10 GC
+	must(t, s.e.SetTariff(s.ctx, admin, "overdraft_factor", "", dec("1")))
+	after, err := s.create(u, hero, "after")
+	must(t, err)
+
+	if s.reserved(taskID(before)) != "150.0000" || s.reserved(taskID(after)) != "200.0000" {
+		t.Fatalf("reserves: before %s after %s", s.reserved(taskID(before)), s.reserved(taskID(after)))
+	}
+	items, err := s.e.Catalog(s.ctx)
+	must(t, err)
+	for _, it := range items {
+		if it.FormID == "tale.start.v1" && it.Price != "200.0000" {
+			t.Fatalf("catalog price %s", it.Price)
+		}
+	}
+
+	// Старая задача: картинка по 20 GC, крышка 1.5 × 150 = 225 → 10 картинок = 200 GC, списано всё.
+	s.commitImages(10)
+	// Новая: картинка по 10 GC, крышка 1 × 200 → 30 картинок = 300 GC упираются в 200.
+	s.commitImages(30)
+	var charges []string
+	rows, err := s.e.pool.Query(s.ctx, `SELECT sum(amount)::text FROM transactions WHERE type IN ('charge', 'overcharge')
+		GROUP BY task_id ORDER BY min(id)`)
+	must(t, err)
+	for rows.Next() {
+		var c string
+		must(t, rows.Scan(&c))
+		charges = append(charges, c)
+	}
+	rows.Close()
+	if len(charges) != 2 || charges[0] != "200.0000" || charges[1] != "200.0000" {
+		t.Fatalf("charges: %v", charges)
+	}
+	s.checkMoney()
+
+	// Сброс — снова как в паспорте.
+	must(t, s.e.SetTariff(s.ctx, admin, "form_price", "tale.start.v1", nil))
+	reset, err := s.create(u, hero, "reset")
+	must(t, err)
+	if s.reserved(taskID(reset)) != "150.0000" {
+		t.Fatalf("after reset: %s", s.reserved(taskID(reset)))
+	}
+
+	tr, err := s.e.AdminTariffs(s.ctx)
+	must(t, err)
+	if len(tr.History) != 4 || tr.Overdraft.Value != "1" || !tr.Overdraft.Override {
+		t.Fatalf("tariffs: history %d overdraft %+v", len(tr.History), tr.Overdraft)
+	}
+	var images TariffUnit
+	for _, u := range tr.Units {
+		if u.Unit == "images" {
+			images = u
+		}
+	}
+	if images.Rate != "10000" || images.Manifest != "20000" || !images.Override {
+		t.Fatalf("images rate: %+v", images)
+	}
+}
+
+func TestTariffValidation(t *testing.T) {
+	s := setup(t)
+	admin := uuid.New()
+	for name, c := range map[string]struct {
+		scope, target string
+		value         *decimal.Decimal
+	}{
+		"unknown form":       {"form_price", "nope.v1", dec("10")},
+		"fact form":          {"form_price", "tale.character.v1", dec("10")},
+		"unknown unit":       {"unit_rate", "tale:gpu", dec("1")},
+		"no department":      {"unit_rate", "images", dec("1")},
+		"factor below one":   {"overdraft_factor", "", dec("0.5")},
+		"zero price":         {"form_price", "tale.start.v1", dec("0")},
+		"unknown scope":      {"discount", "", dec("1")},
+		"factor with target": {"overdraft_factor", "x", dec("2")},
+	} {
+		if err := s.e.SetTariff(s.ctx, admin, c.scope, c.target, c.value); refusalCode(err) != codes.ValidationError {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// Журнал только дописывается.
+	must(t, s.e.SetTariff(s.ctx, admin, "overdraft_factor", "", dec("2")))
+	if _, err := s.e.pool.Exec(s.ctx, `UPDATE tariff_changes SET value = 3`); err == nil {
+		t.Fatal("tariff journal must be append-only")
+	}
+}

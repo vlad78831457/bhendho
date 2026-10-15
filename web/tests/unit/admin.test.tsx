@@ -26,6 +26,12 @@ function adminApi(calls: string[]) {
     else if (u.includes("/facts") && init?.method === "POST") body = { ...facts[0], id: 2 };
     else if (u.includes("/facts")) body = { items: facts };
     else if (u.endsWith("/api/v1/admin/settings")) body = { overdraft_factor: "1.5", max_attempts: 5 };
+    else if (u.endsWith("/api/v1/admin/tariffs")) body = {
+      forms: [{ service: "taleweaver", form_id: "taleweaver.generate_start.v1", title: "Сказка", manifest_price: "150.0000", price: "150.0000", override: false }],
+      units: [{ service: "taleweaver", unit: "images", base: false, manifest_rate: "20000", rate: "20000", override: false }],
+      overdraft_factor: { config: "1.5", value: "1.5", override: false },
+      history: [],
+    };
     else if (u.includes("/api/v1/admin/export")) return new Response("PK", { status: 200, headers: { "Content-Type": "application/zip" } });
     return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   };
@@ -74,4 +80,14 @@ test("export downloads the whole database for the chosen period", async () => {
   expect(await screen.findByText("Архив скачан.")).toBeTruthy();
   expect(calls).toContain("GET /api/v1/admin/export?from=2026-10-01&to=2026-10-16 ");
   expect(click).toHaveBeenCalled();
+});
+
+test("tariffs: a new price is sent and applies to new tasks", async () => {
+  const calls: string[] = [];
+  location.hash = "#/tariffs";
+  render(<SessionProvider api={adminApi(calls)}><App /></SessionProvider>);
+  fireEvent.change(await screen.findByLabelText("новое: Сказка (taleweaver)"), { target: { value: "199,5" } });
+  fireEvent.click(screen.getAllByText("Сохранить")[0]);
+  expect(await screen.findByText("Сохранено. Действует для новых задач.")).toBeTruthy();
+  expect(calls).toContain('PUT /api/v1/admin/tariffs {"scope":"form_price","target":"taleweaver.generate_start.v1","value":"199.5"}');
 });

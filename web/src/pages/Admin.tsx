@@ -173,3 +173,80 @@ export function SettingsPage() {
     </>
   );
 }
+
+/** Одна строка тарифа: значение из паспорта, действующее и поле для нового. */
+function TariffRow({ label, manifest, value, override, onSave }: {
+  label: string; manifest: string; value: string; override: boolean; onSave: (v: string | null) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState("");
+  return (
+    <tr>
+      <td>{label}</td>
+      <td className="small">{manifest}</td>
+      <td>{override ? <strong>{value}</strong> : value}</td>
+      <td>
+        <input aria-label={`новое: ${label}`} inputMode="decimal" value={draft} onChange={(e) => setDraft(e.target.value)} size={8} />{" "}
+        <button type="button" disabled={!draft} onClick={() => void onSave(draft.replace(",", ".")).then(() => setDraft(""))}>Сохранить</button>{" "}
+        {override && <button type="button" className="ghost" onClick={() => void onSave(null)}>Как в паспорте</button>}
+      </td>
+    </tr>
+  );
+}
+
+/** Тарифы (ADR-69): меняются без перезапуска; задачи помнят тарифы на момент создания. */
+export function TariffsPage() {
+  const { api } = useSession();
+  const { data, error, reload } = useLoad(() => api.adminTariffs(), [api]);
+  const [message, setMessage] = useState("");
+  if (!data) return <Loading error={error} />;
+  const save = (scope: string, target: string) => async (v: string | null) => {
+    try {
+      await api.adminSetTariff(scope, target, v);
+      setMessage("Сохранено. Действует для новых задач.");
+      reload();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    }
+  };
+  return (
+    <>
+      <h1>Тарифы</h1>
+      <p className="muted">Меняются сразу, без перезапуска. Задачи, созданные раньше, списываются по прежним тарифам.</p>
+      {message && <p role="status">{message}</p>}
+      <table>
+        <thead>
+          <tr><th>Что</th><th>В паспорте</th><th>Действует</th><th>Изменить</th></tr>
+        </thead>
+        <tbody>
+          <tr><th colSpan={4}>Резерв задачи, GC</th></tr>
+          {data.forms.map((f) => (
+            <TariffRow key={f.form_id} label={`${f.title} (${f.service})`} manifest={f.manifest_price} value={f.price}
+              override={f.override} onSave={save("form_price", f.form_id)} />
+          ))}
+          <tr><th colSpan={4}>Единицы подразделений</th></tr>
+          {data.units.map((u) => (
+            <TariffRow key={`${u.service}:${u.unit}`}
+              label={`${u.service}: ${u.unit} — ${u.base ? "GC за единицу" : "основных единиц в одной"}`}
+              manifest={u.manifest_rate} value={u.rate} override={u.override} onSave={save("unit_rate", `${u.service}:${u.unit}`)} />
+          ))}
+          <tr><th colSpan={4}>Минус</th></tr>
+          <TariffRow label="Крышка списания, резервов" manifest={data.overdraft_factor.config} value={data.overdraft_factor.value}
+            override={data.overdraft_factor.override} onSave={save("overdraft_factor", "")} />
+        </tbody>
+      </table>
+      <h2>Изменения</h2>
+      <table>
+        <tbody>
+          {data.history.map((h, i) => (
+            <tr key={i}>
+              <td className="small">{new Date(h.created_at).toLocaleString("ru-RU")}</td>
+              <td className="small">{h.scope} {h.target}</td>
+              <td>{h.value ?? "как в паспорте"}</td>
+              <td className="small">{h.writer}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
