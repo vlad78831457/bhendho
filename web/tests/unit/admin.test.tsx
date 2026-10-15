@@ -26,6 +26,7 @@ function adminApi(calls: string[]) {
     else if (u.includes("/facts") && init?.method === "POST") body = { ...facts[0], id: 2 };
     else if (u.includes("/facts")) body = { items: facts };
     else if (u.endsWith("/api/v1/admin/settings")) body = { overdraft_factor: "1.5", max_attempts: 5 };
+    else if (u.includes("/api/v1/admin/export")) return new Response("PK", { status: 200, headers: { "Content-Type": "application/zip" } });
     return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   };
   return new Api("", f as unknown as typeof fetch);
@@ -57,4 +58,20 @@ test("settings are shown read-only", async () => {
   render(<SessionProvider api={adminApi([])}><App /></SessionProvider>);
   expect(await screen.findByText("overdraft_factor")).toBeTruthy();
   expect(screen.getByText("1.5")).toBeTruthy();
+});
+
+test("export downloads the whole database for the chosen period", async () => {
+  const calls: string[] = [];
+  URL.createObjectURL = vi.fn(() => "blob:x");
+  URL.revokeObjectURL = vi.fn();
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  location.hash = "#/depts";
+  render(<SessionProvider api={adminApi(calls)}><App /></SessionProvider>);
+  await screen.findByText("Сказки");
+  fireEvent.change(screen.getByLabelText(/^С/), { target: { value: "2026-10-01" } });
+  fireEvent.change(screen.getByLabelText(/по/), { target: { value: "2026-10-16" } });
+  fireEvent.click(screen.getByText("Выгрузить"));
+  expect(await screen.findByText("Архив скачан.")).toBeTruthy();
+  expect(calls).toContain("GET /api/v1/admin/export?from=2026-10-01&to=2026-10-16 ");
+  expect(click).toHaveBeenCalled();
 });

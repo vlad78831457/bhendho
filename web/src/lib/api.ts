@@ -85,6 +85,19 @@ export class Api {
     return data as T;
   }
 
+  /** Файл по адресу ядра с токеном (выгрузка): 401 — одна попытка обновить токен. */
+  async download(path: string, retry = true): Promise<Blob> {
+    const headers: Record<string, string> = {};
+    if (this.tokens) headers.Authorization = `Bearer ${this.tokens.access_token}`;
+    const res = await this.fetchImpl(this.base + path, { method: "GET", headers });
+    if (res.status === 401 && retry && this.tokens && (await this.refresh())) return this.download(path, false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, null, data?.error?.code ?? `HTTP_${res.status}`, data?.error?.message ?? res.statusText);
+    }
+    return res.blob();
+  }
+
   /** Ротация refresh-токена; при отказе сессия закрывается (ADR-44). */
   private refresh(): Promise<boolean> {
     if (!this.refreshing) {
@@ -190,6 +203,9 @@ export class Api {
   adminWriteFact = (service: string, formId: string, values: Record<string, unknown>) =>
     this.request<ServiceFact>("POST", `/api/v1/admin/services/${encodeURIComponent(service)}/facts`, { form_id: formId, values });
   adminSettings = () => this.request<Record<string, unknown>>("GET", "/api/v1/admin/settings");
+  /** Вся база за период архивом (ADR-67); to не включается. */
+  adminExport = (from: string, to: string) =>
+    this.download(`/api/v1/admin/export?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
   /** Промокод службы оплаты (ADR-57): зачисление один раз; повтор того же пользователя — already_redeemed. */
   redeemPromo = (code: string) =>
     this.request<{ code_id: string; amount: string; currency_id: string; already_redeemed: boolean; wallet: Wallet }>(

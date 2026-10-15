@@ -13,6 +13,40 @@ import { Loading, useLoad } from "./Pages";
 const factLink = (service: string, formId: string) =>
   `#/dept/${encodeURIComponent(service)}/${encodeURIComponent(formId)}`;
 
+const day = (offset: number) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+
+/** Выгрузка всей базы за период (ADR-67): архив по таблицам, без секретов. */
+export function ExportBox() {
+  const { api } = useSession();
+  const [from, setFrom] = useState(day(-30));
+  const [to, setTo] = useState(day(1));
+  const [message, setMessage] = useState("");
+  const run = async (e: FormEvent) => {
+    e.preventDefault();
+    setMessage("Готовлю архив…");
+    try {
+      const blob = await api.adminExport(from, to);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `offgrid-${from}-${to}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setMessage("Архив скачан.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    }
+  };
+  return (
+    <form onSubmit={run} className="card">
+      <h2>Выгрузка всей базы за период</h2>
+      <label>С <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>{" "}
+      <label>по (не включая) <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>{" "}
+      <button type="submit">Выгрузить</button>
+      {message && <p role="status">{message}</p>}
+    </form>
+  );
+}
+
 /** Подразделения и все их бланки — схема бланков для админа. */
 export function DepartmentsPage() {
   const { api } = useSession();
@@ -22,6 +56,7 @@ export function DepartmentsPage() {
   return (
     <>
       <h1>Подразделения</h1>
+      <ExportBox />
       {data.map((s) => (
         <section key={s.code} className="card">
           <h2>{s.title}</h2>
