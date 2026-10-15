@@ -75,6 +75,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/files/{id}/content", s.fileContent)
 
 	mux.HandleFunc("GET /api/v1/catalog", s.catalog)
+	mux.HandleFunc("GET /api/v1/views", s.views) // разметка подразделений (ADR-72)
 	mux.HandleFunc("GET /api/v1/forms/{form_id}", s.template)
 
 	mux.HandleFunc("GET /api/v1/wallets", s.user(s.wallets))

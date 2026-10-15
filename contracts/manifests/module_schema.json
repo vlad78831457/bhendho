@@ -103,6 +103,36 @@
       },
       "additionalProperties": false
     },
+    "views": {
+      "type": "array",
+      "description": "Разметка общей территории фронта (ADR-72): card — как выглядит факт, section — раздел кабинета, menu — пункт меню. Рисует оболочка, стиль общий.",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_.-]+$" },
+          "kind": { "enum": ["card", "section", "menu"] },
+          "form": { "type": "string" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "body": { "type": "array", "minItems": 1, "maxItems": 12, "items": { "$ref": "#/$defs/cardElement" } },
+          "card": { "type": "string" },
+          "order": { "enum": ["created_at", "-created_at"] },
+          "icon": { "enum": ["book", "user", "wallet", "star", "image", "music", "list", "settings", "help"] },
+          "target": {
+            "type": "object",
+            "minProperties": 1, "maxProperties": 1,
+            "properties": { "form": { "type": "string" }, "section": { "type": "string" }, "screen": { "type": "string", "pattern": "^/d/[a-z0-9_-]+/" } },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          { "if": { "properties": { "kind": { "const": "card" } } }, "then": { "required": ["form", "body"] } },
+          { "if": { "properties": { "kind": { "const": "section" } } }, "then": { "required": ["form", "card", "title"] } },
+          { "if": { "properties": { "kind": { "const": "menu" } } }, "then": { "required": ["title", "target"] } }
+        ]
+      }
+    },
     "events_subscribed": { "type": "array", "items": { "type": "string" } },
     "events_published": { "type": "array", "items": { "type": "string" } }
   },
@@ -116,5 +146,32 @@
       "then": { "required": ["worker"] }
     }
   ],
+  "$defs": {
+    "field": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "cardElement": {
+      "description": "Шесть элементов карточки (ADR-72): значения берутся из полей факта по имени",
+      "oneOf": [
+        { "type": "object", "required": ["title"], "properties": { "title": { "$ref": "#/$defs/field" } }, "additionalProperties": false },
+        { "type": "object", "required": ["text"], "properties": { "text": { "$ref": "#/$defs/field" }, "lines": { "type": "integer", "minimum": 1, "maximum": 10 } }, "additionalProperties": false },
+        { "type": "object", "required": ["image"], "properties": { "image": { "$ref": "#/$defs/field" } }, "additionalProperties": false },
+        { "type": "object", "required": ["facts"], "properties": { "facts": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/field" } } }, "additionalProperties": false },
+        { "type": "object", "required": ["badge"], "properties": { "badge": { "$ref": "#/$defs/field" } }, "additionalProperties": false },
+        {
+          "type": "object", "required": ["action"],
+          "properties": {
+            "action": { "enum": ["open", "continue", "screen"] },
+            "label": { "type": "string", "minLength": 1, "maxLength": 30 },
+            "form": { "type": "string" },
+            "path": { "type": "string", "pattern": "^/d/[a-z0-9_-]+/" }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            { "if": { "properties": { "action": { "const": "continue" } } }, "then": { "required": ["form"] } },
+            { "if": { "properties": { "action": { "const": "screen" } } }, "then": { "required": ["path"] } }
+          ]
+        }
+      ]
+    }
+  },
   "additionalProperties": false
 }

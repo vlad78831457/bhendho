@@ -72,6 +72,17 @@ func TestAdminPanelOverHTTP(t *testing.T) {
 	}
 	s.call("PUT", "/api/v1/admin/tariffs", admin, map[string]any{"scope": "overdraft_factor", "value": "0.5"}, http.StatusUnprocessableEntity)
 
+	// Разметка подразделений (ADR-72) — открыта, как каталог; у выключенного подразделения её нет.
+	views := s.call("GET", "/api/v1/views", "", nil, http.StatusOK)["items"].([]any)
+	if len(views) != 1 || len(views[0].(map[string]any)["views"].([]any)) != 3 {
+		t.Fatalf("views: %v", views)
+	}
+	s.call("PUT", "/api/v1/admin/services/taleweaver", admin, map[string]any{"enabled": false}, http.StatusNoContent)
+	if off := s.call("GET", "/api/v1/views", "", nil, http.StatusOK)["items"].([]any); len(off) != 0 {
+		t.Fatalf("views of a switched-off department: %v", off)
+	}
+	s.call("PUT", "/api/v1/admin/services/taleweaver", admin, map[string]any{"enabled": true}, http.StatusNoContent)
+
 	// Настройки — числа и включатели, без секретов.
 	st := s.call("GET", "/api/v1/admin/settings", admin, nil, http.StatusOK)
 	raw, _ := json.Marshal(st)

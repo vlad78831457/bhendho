@@ -29,6 +29,21 @@ forms_provided:
     title: Расход подразделения
     schema_file: forms/spend.json
     audience: adm
+views:                             # ADR-72: как показать факты на общей территории фронта
+  - id: example.note.card
+    kind: card
+    form: example.note.v1
+    body: [{title: name}, {action: continue, form: example.run.v1, label: Обработать}]
+  - id: example.note.section
+    kind: section
+    title: Мои заметки
+    form: example.note.v1
+    card: example.note.card
+  - id: example.menu
+    kind: menu
+    title: Заметки
+    icon: list
+    target: {section: example.note.section}
 worker_accounting:
   base_unit: {name: chars, rate_gc: 0.01}
   extra_units:

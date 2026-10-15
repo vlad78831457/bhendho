@@ -48,6 +48,10 @@ func (e *Engine) upsertService(ctx context.Context, tx pgx.Tx, m modules.Module)
 	if m.Manifest.Accounting != nil {
 		accounting = m.Manifest.Accounting
 	}
+	views := m.Manifest.Views
+	if views == nil {
+		views = []modules.View{}
+	}
 	code := m.TargetService()
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT id FROM services WHERE code = $1 FOR UPDATE`, code).Scan(&id)
@@ -60,16 +64,16 @@ func (e *Engine) upsertService(ctx context.Context, tx pgx.Tx, m modules.Module)
 			return id, err
 		}
 		_, err = tx.Exec(ctx, `
-			INSERT INTO services (id, code, module_id, module_version, title, currency_id, accounting, target_wallet_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			id, code, m.Manifest.ModuleID, m.Manifest.Version, m.Manifest.Name, e.cfg.DefaultCurrency, accounting, walletID)
+			INSERT INTO services (id, code, module_id, module_version, title, currency_id, accounting, target_wallet_id, views)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			id, code, m.Manifest.ModuleID, m.Manifest.Version, m.Manifest.Name, e.cfg.DefaultCurrency, accounting, walletID, views)
 		return id, err
 	case err != nil:
 		return id, err
 	}
 	_, err = tx.Exec(ctx, `
-		UPDATE services SET module_id = $2, module_version = $3, title = $4, accounting = $5, updated_at = now()
-		WHERE id = $1`, id, m.Manifest.ModuleID, m.Manifest.Version, m.Manifest.Name, accounting)
+		UPDATE services SET module_id = $2, module_version = $3, title = $4, accounting = $5, views = $6, updated_at = now()
+		WHERE id = $1`, id, m.Manifest.ModuleID, m.Manifest.Version, m.Manifest.Name, accounting, views)
 	return id, err
 }
 

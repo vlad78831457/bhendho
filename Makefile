@@ -17,6 +17,7 @@ test: ## gofmt, go vet, go test против Postgres + тесты Python SDK + 
 	docker compose run --rm --build test
 	docker compose run --rm --build sdk-test
 	docker compose run --rm --build web-test
+	docker compose run --rm --build ts-sdk-test
 	docker compose run --rm --build template-test
 
 e2e: ## Python SDK против живого ядра (отдельный compose-проект)
