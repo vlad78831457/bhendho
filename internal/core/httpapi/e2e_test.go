@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"offgrid/core/internal/core/auth"
 	"offgrid/core/internal/core/auth/oauth"
@@ -37,6 +38,7 @@ type stack struct {
 	prorab  string
 	issuer  string
 	idp     *oauthtest.Fake // поддельные Google (OIDC) и VK ID (/vk), ADR-58
+	pool    *pgxpool.Pool
 	cleanup context.CancelFunc
 }
 
@@ -74,6 +76,7 @@ func newStack(t *testing.T) *stack {
 		"hero": {"type": "fact_ref", "required": true, "expected_fact_kind": "taleweaver.character.v1"},
 		"mode": {"type": "select", "options": ["narrative", "interactive"]}}}`)
 	write("forms/generate_continue.json", `{"title": "Продолжить", "fields_rules": {"choice_index": {"type": "int", "min": 0}}}`)
+	write("forms/spend.json", `{"title": "Расход", "fields_rules": {"model": {"type": "string"}, "tokens": {"type": "int"}}}`)
 	mod, err := modules.Load(dir, v)
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +110,7 @@ func newStack(t *testing.T) *stack {
 	authSvc := auth.New(pool, cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL).WithOAuth(providers)
 	srv := httptest.NewServer(New(eng, authSvc, hub, log).WithFileLinks(files.NewSigner(cfg.JWTSecret), cfg.FileLinkTTL).Handler())
 	t.Cleanup(func() { cancel(); srv.Close() })
-	return &stack{t: t, srv: srv, v: v, prorab: token, issuer: issuer, idp: idp, cleanup: cancel}
+	return &stack{t: t, srv: srv, v: v, prorab: token, issuer: issuer, idp: idp, pool: pool, cleanup: cancel}
 }
 
 func (s *stack) call(method, path, token string, body any, wantStatus int) map[string]any {

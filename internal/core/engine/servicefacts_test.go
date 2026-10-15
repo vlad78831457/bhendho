@@ -49,11 +49,11 @@ func TestServiceFactsStored(t *testing.T) {
 		values                          map[string]any
 	)
 	must(t, s.e.pool.QueryRow(s.ctx, `
-		SELECT s.code, f.form_id, f.schema_version, f.audience, f.task_id::text, f.user_id::text, f.prorab, f.values
+		SELECT s.code, f.form_id, f.schema_version, f.audience, f.task_id::text, f.user_id::text, f.writer, f.values
 		FROM service_facts f JOIN services s ON s.id = f.service_id`).
 		Scan(&service, &form, &version, &audience, &factTask, &userID, &prorab, &values))
 	if service != "tale" || form != "tale.spend.v1" || version != 1 || audience != "adm" ||
-		factTask != taskID(created).String() || userID != u.String() || prorab != s.acc.Name || values["prompt"] != "жил-был лисёнок" {
+		factTask != taskID(created).String() || userID != u.String() || prorab != "prorab:"+s.acc.Name || values["prompt"] != "жил-был лисёнок" {
 		t.Fatalf("service fact: %s %s v%d %s task %s user %s prorab %s %v", service, form, version, audience, factTask, userID, prorab, values)
 	}
 

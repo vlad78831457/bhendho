@@ -83,6 +83,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/promo-codes/redeem", s.user(s.redeemPromo))
 	mux.HandleFunc("POST /api/v1/topup-marks", s.user(s.topupMark))
 
+	// Панель админа (ADR-66), только роль admin.
+	mux.HandleFunc("GET /api/v1/admin/services", s.admin(s.adminServices))
+	mux.HandleFunc("GET /api/v1/admin/services/{service}/facts", s.admin(s.adminFacts))
+	mux.HandleFunc("POST /api/v1/admin/services/{service}/facts", s.admin(s.adminWriteFact))
+	mux.HandleFunc("GET /api/v1/admin/settings", s.admin(s.adminSettings))
+
 	mux.HandleFunc("POST /api/v1/facts", s.user(s.createFact))
 	mux.HandleFunc("GET /api/v1/facts", s.user(s.listFacts))
 	mux.HandleFunc("GET /api/v1/facts/{id}", s.user(s.getFact))
