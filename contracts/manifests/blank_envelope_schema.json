@@ -65,6 +65,12 @@
       }
     },
     "values": { "type": "object", "additionalProperties": true },
+    "user_marks": {
+      "type": "object",
+      "description": "пометки пользователя, которые запросила форма задачи (ADR-68); есть только в снимке для прораба",
+      "properties": { "role": { "enum": ["user", "tester", "admin"] } },
+      "additionalProperties": false
+    },
     "report": {
       "type": ["object", "null"],
       "required": ["verdict"],

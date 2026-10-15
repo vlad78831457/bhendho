@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -89,4 +90,20 @@ func departmentForm(ctx context.Context, q querier, service, formID string) (ver
 		return 0, "", fmt.Sprintf("%q is for the user — send it as the task result", formID), nil
 	}
 	return version, audience, "", nil
+}
+
+// userMarksFor — пометки пользователя, которые запросила форма задачи (ADR-68). Прораб видит только их.
+func userMarksFor(ctx context.Context, q querier, userID uuid.UUID, wanted []string) (map[string]any, error) {
+	marks := map[string]any{}
+	for _, m := range wanted {
+		switch m {
+		case "role":
+			var role string
+			if err := q.QueryRow(ctx, `SELECT role FROM users WHERE id = $1`, userID).Scan(&role); err != nil {
+				return nil, err
+			}
+			marks["role"] = role
+		}
+	}
+	return marks, nil
 }

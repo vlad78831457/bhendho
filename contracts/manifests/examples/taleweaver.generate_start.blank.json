@@ -29,6 +29,7 @@
   "commands": {
     "cancel": { "status": "disabled", "reason": "Задача уже завершена" }
   },
+  "user_marks": { "role": "user" },
   "values": {
     "hero": "0b6c1f4e-8f0e-4a55-b2a7-3e9d1c7f2a01",
     "mode": "interactive",

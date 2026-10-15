@@ -37,11 +37,12 @@ type template struct {
 	ServiceCode string
 	Accounting  *modules.Accounting
 	Result      *modules.ResultSpec // факт-результат (ADR-51)
+	UserMarks   []string            // пометки пользователя для прораба (ADR-68)
 }
 
 const templateSelect = `
 	SELECT f.form_id, f.version, f.kind, f.title, f.meta_ui, f.price::text, f.currency_id, f.status,
-	       f.service_id, COALESCE(s.code, ''), s.accounting, f.result_spec
+	       f.service_id, COALESCE(s.code, ''), s.accounting, f.result_spec, f.user_marks
 	FROM forms f LEFT JOIN services s ON s.id = f.service_id`
 
 func scanTemplate(row pgx.Row) (template, error) {
@@ -53,7 +54,7 @@ func scanTemplate(row pgx.Row) (template, error) {
 		resJSON  []byte
 	)
 	if err := row.Scan(&t.FormID, &t.Version, &t.Kind, &t.Title, &meta, &price, &t.Currency, &t.Status,
-		&t.ServiceID, &t.ServiceCode, &acctJSON, &resJSON); err != nil {
+		&t.ServiceID, &t.ServiceCode, &acctJSON, &resJSON, &t.UserMarks); err != nil {
 		return t, err
 	}
 	t.Price = decimal.RequireFromString(price)

@@ -30,7 +30,7 @@ worker: {runtime: python, target_service: tale}
 capabilities: {}
 forms_provided:
   - {form_id: tale.character.v1, kind: fact, title: Персонаж, schema_file: forms/character.json}
-  - {form_id: tale.start.v1, kind: task, title: Сказка, schema_file: forms/start.json, base_price_gc: 150}
+  - {form_id: tale.start.v1, kind: task, title: Сказка, schema_file: forms/start.json, base_price_gc: 150, user_marks: [role]}
   - {form_id: tale.spend.v1, kind: fact, title: Расход, schema_file: forms/character.json, audience: adm}
 worker_accounting:
   base_unit: {name: tokens, rate_gc: 0.001}

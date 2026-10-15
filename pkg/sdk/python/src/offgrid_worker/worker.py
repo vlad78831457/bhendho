@@ -90,6 +90,11 @@ class TaskContext:
         return copy.deepcopy(self._claimed.blank.values)
 
     @property
+    def user_marks(self) -> dict[str, Any]:
+        """Пометки пользователя, которые запросила форма задачи (ADR-68), например {"role": "tester"}."""
+        return dict(self._claimed.blank.user_marks)
+
+    @property
     def lost(self) -> bool:
         """Задачу у нас забрали (лок истёк, отменена) — дальнейшая работа бесполезна."""
         return self._lost.is_set()
