@@ -75,3 +75,16 @@ func (s *Service) Role(ctx context.Context, userID uuid.UUID) (string, error) {
 	}
 	return role, err
 }
+
+// SetSource — метка источника (ADR-75): ставится один раз, первая побеждает; длиннее 300 символов — обрезается.
+func (s *Service) SetSource(ctx context.Context, userID uuid.UUID, source string) error {
+	source = strings.TrimSpace(source)
+	if r := []rune(source); len(r) > 300 {
+		source = string(r[:300])
+	}
+	if source == "" {
+		return nil
+	}
+	_, err := s.pool.Exec(ctx, `UPDATE users SET source = $2 WHERE id = $1 AND source = ''`, userID, source)
+	return err
+}

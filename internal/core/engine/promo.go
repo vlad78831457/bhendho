@@ -251,6 +251,7 @@ type PromoRedemption struct {
 	Amount          string     `json:"amount"`
 	CurrencyID      string     `json:"currency_id"`
 	AlreadyRedeemed bool       `json:"already_redeemed"`
+	UserSource      string     `json:"user_source,omitempty"` // метка источника для факта платежа (ADR-75)
 	Wallet          WalletView `json:"wallet"`
 }
 
@@ -328,6 +329,9 @@ func (e *Engine) redeemTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, code
 			return ErrPromoInvalid
 		}
 		res = PromoRedemption{CodeID: id, Amount: decimal.RequireFromString(amount).StringFixed(4), CurrencyID: currency}
+		if err := tx.QueryRow(ctx, `SELECT source FROM users WHERE id = $1`, userID).Scan(&res.UserSource); err != nil {
+			return err
+		}
 		if status == "redeemed" {
 			if redeemedBy != nil && *redeemedBy == userID {
 				// Повтор того же пользователя (двойной клик, повтор вебхука) — деньги уже зачислены.

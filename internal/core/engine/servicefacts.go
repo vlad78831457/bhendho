@@ -97,6 +97,12 @@ func userMarksFor(ctx context.Context, q querier, userID uuid.UUID, wanted []str
 	marks := map[string]any{}
 	for _, m := range wanted {
 		switch m {
+		case "source":
+			var src string
+			if err := q.QueryRow(ctx, `SELECT source FROM users WHERE id = $1`, userID).Scan(&src); err != nil {
+				return nil, err
+			}
+			marks["source"] = src
 		case "role":
 			var role string
 			if err := q.QueryRow(ctx, `SELECT role FROM users WHERE id = $1`, userID).Scan(&role); err != nil {
