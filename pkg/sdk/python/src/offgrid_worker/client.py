@@ -10,6 +10,7 @@ import asyncio
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -75,6 +76,15 @@ class GatewayClient:
 
     async def aclose(self) -> None:
         await self._http.aclose()
+
+    async def register(self, module_dir: str | Path) -> dict[str, Any]:
+        """Подключить подразделение (ADR-70): паспорт module.yaml и все .json рядом.
+
+        Токен клиента — ключ подразделения. Ядро проверяет паспорт и формы и регистрирует их
+        без перезапуска; повтор с новой версией — обновление.
+        """
+        body = await asyncio.to_thread(_read_module, Path(module_dir))
+        return dict((await self._post("/register", body)).json())
 
     async def claim(self, target_service: str, schema_versions: Sequence[int]) -> ClaimedTask | None:
         """Забрать задачу; None — очередь пуста."""
@@ -185,3 +195,11 @@ class GatewayClient:
                 state = None
             raise NotOwnerError(state, resp.text)
         raise GatewayError(resp.status_code, resp.text)
+
+
+def _read_module(root: Path) -> dict[str, Any]:
+    """Паспорт и все .json модуля — тело запроса регистрации (ADR-70)."""
+    files = {
+        p.relative_to(root).as_posix(): p.read_text(encoding="utf-8") for p in sorted(root.rglob("*.json"))
+    }
+    return {"module_yaml": (root / "module.yaml").read_text(encoding="utf-8"), "files": files}

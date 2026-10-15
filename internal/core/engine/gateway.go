@@ -50,6 +50,14 @@ func (e *Engine) Claim(ctx context.Context, acc ServiceAccount, versions []int) 
 	if len(versions) == 0 {
 		return nil, refuse(codes.ValidationError, "schema_versions is required")
 	}
+	// Выключенное подразделение задач не получает (ADR-70); его задачи ждут в очереди.
+	var enabled bool
+	if err := e.pool.QueryRow(ctx, `SELECT enabled FROM services WHERE id = $1`, acc.ServiceID).Scan(&enabled); err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, nil
+	}
 	for i := 0; i < maxClaimScan; i++ {
 		var (
 			claimed *ClaimedTask

@@ -47,21 +47,50 @@ export function ExportBox() {
   );
 }
 
+/** Ключ для нового или обновляемого подразделения (ADR-70): подразделение подключается с ним само. */
+export function DepartmentKeyBox() {
+  const { api } = useSession();
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("main");
+  const [result, setResult] = useState("");
+  const issue = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      const r = await api.adminDepartmentKey(code.trim(), name.trim());
+      setResult(`Ключ для ${r.code} / ${r.name}: ${r.key} — сохраните сейчас, больше он не покажется.`);
+    } catch (err) {
+      setResult(err instanceof Error ? err.message : String(err));
+    }
+  };
+  return (
+    <form onSubmit={issue} className="card">
+      <h2>Ключ подразделения</h2>
+      <label>Код <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="taleweaver" /></label>{" "}
+      <label>Прораб <input value={name} onChange={(e) => setName(e.target.value)} /></label>{" "}
+      <button type="submit" disabled={!code.trim()}>Выдать ключ</button>
+      {result && <p role="status" className="small">{result}</p>}
+    </form>
+  );
+}
+
 /** Подразделения и все их бланки — схема бланков для админа. */
 export function DepartmentsPage() {
   const { api } = useSession();
-  const { data, error } = useLoad<AdminService[]>(() => api.adminServices(), [api]);
+  const { data, error, reload } = useLoad<AdminService[]>(() => api.adminServices(), [api]);
   if (!data) return <Loading error={error} />;
-  if (!data.length) return <p>Подразделений нет: ни один модуль не зарегистрирован.</p>;
+  const toggle = (s: AdminService) => void api.adminSetEnabled(s.code, !s.enabled).then(reload);
   return (
     <>
       <h1>Подразделения</h1>
       <ExportBox />
+      <DepartmentKeyBox />
+      {!data.length && <p>Подразделений нет: ни один модуль не зарегистрирован.</p>}
       {data.map((s) => (
         <section key={s.code} className="card">
-          <h2>{s.title}</h2>
+          <h2>{s.title}{!s.enabled && " — выключено"}</h2>
           <p className="muted">
-            {s.code} · {s.module_id} {s.module_version}
+            {s.code} · {s.module_id} {s.module_version}{" "}
+            <button type="button" className="ghost small" onClick={() => toggle(s)}>{s.enabled ? "Выключить" : "Включить"}</button>
           </p>
           <table>
             <thead>

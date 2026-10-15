@@ -105,12 +105,27 @@ func LoadDir(dir string, v *contracts.Validator) ([]Module, error) {
 	return out, nil
 }
 
-// Load читает один модуль: проверяет паспорт по схеме и каждую форму по правилам ADR-35.
+// Load читает один модуль с диска: проверяет паспорт по схеме и каждую форму по правилам ADR-35.
 func Load(dir string, v *contracts.Validator) (Module, error) {
 	raw, err := os.ReadFile(filepath.Join(dir, "module.yaml"))
 	if err != nil {
 		return Module{}, err
 	}
+	return parse(dir, raw, func(path string) ([]byte, error) { return os.ReadFile(filepath.Join(dir, filepath.Clean(path))) }, v)
+}
+
+// Parse — модуль, присланный подразделением при самостоятельной регистрации (ADR-70): паспорт и файлы форм
+// по путям из schema_file.
+func Parse(label string, manifest []byte, files map[string][]byte, v *contracts.Validator) (Module, error) {
+	return parse(label, manifest, func(path string) ([]byte, error) {
+		if body, ok := files[path]; ok {
+			return body, nil
+		}
+		return nil, fmt.Errorf("file %q is not sent", path)
+	}, v)
+}
+
+func parse(dir string, raw []byte, read func(path string) ([]byte, error), v *contracts.Validator) (Module, error) {
 	if err := v.ValidateManifestYAML(raw); err != nil {
 		return Module{}, fmt.Errorf("%s: %w", dir, err)
 	}
@@ -120,7 +135,7 @@ func Load(dir string, v *contracts.Validator) (Module, error) {
 	}
 	mod := Module{Dir: dir, Manifest: man}
 	for _, ref := range man.FormsProvided {
-		body, err := os.ReadFile(filepath.Join(dir, filepath.Clean(ref.SchemaFile)))
+		body, err := read(ref.SchemaFile)
 		if err != nil {
 			return Module{}, fmt.Errorf("%s: form %s: %w", dir, ref.FormID, err)
 		}

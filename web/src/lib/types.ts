@@ -191,6 +191,7 @@ export interface AdminService {
   title: string;
   module_id: string;
   module_version: string;
+  enabled: boolean;
   forms: AdminForm[];
 }
 

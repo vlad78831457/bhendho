@@ -204,6 +204,11 @@ export class Api {
     this.request<ServiceFact>("POST", `/api/v1/admin/services/${encodeURIComponent(service)}/facts`, { form_id: formId, values });
   adminSettings = () => this.request<Record<string, unknown>>("GET", "/api/v1/admin/settings");
   adminTariffs = () => this.request<Tariffs>("GET", "/api/v1/admin/tariffs");
+  /** Ключ подразделения (ADR-70): показывается один раз. */
+  adminDepartmentKey = (code: string, name: string) =>
+    this.request<{ code: string; name: string; key: string }>("POST", "/api/v1/admin/departments/keys", { code, name });
+  adminSetEnabled = (service: string, enabled: boolean) =>
+    this.request<void>("PUT", `/api/v1/admin/services/${encodeURIComponent(service)}`, { enabled });
   /** value null — вернуть как в паспорте или настройках. */
   adminSetTariff = (scope: string, target: string, value: string | null) =>
     this.request<Tariffs>("PUT", "/api/v1/admin/tariffs", { scope, target, value });
