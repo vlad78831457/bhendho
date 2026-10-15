@@ -30,6 +30,11 @@ forms_provided:
     title: Продолжить сказку после выбора
     schema_file: forms/generate_continue.json
     base_price_gc: 80
+  - form_id: taleweaver.spend.v1
+    kind: fact
+    title: Расход на модели — для админа и бухгалтера (ADR-65)
+    schema_file: forms/spend.json
+    audience: adm
 worker_accounting:
   base_unit:
     name: tokens

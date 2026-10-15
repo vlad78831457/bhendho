@@ -46,18 +46,12 @@ func storeServiceFacts(ctx context.Context, tx pgx.Tx, t task, prorab string, ra
 			return fmt.Sprintf("service_facts[%d]: form_id and values object are required", i), nil
 		}
 		f := serviceFact{formID: formID}
-		err := tx.QueryRow(ctx, `
-			SELECT f.version, f.audience FROM forms f JOIN services s ON s.id = f.service_id
-			WHERE f.form_id = $1 AND f.kind = 'fact' AND f.status = 'published' AND s.code = $2
-			ORDER BY f.version DESC LIMIT 1`, formID, t.TargetService).Scan(&f.version, &f.audience)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Sprintf("service_facts[%d]: %q is not a fact form of this department", i, formID), nil
-		}
-		if err != nil {
+		var why string
+		if f.version, f.audience, why, err = departmentForm(ctx, tx, t.TargetService, formID); err != nil {
 			return "", err
 		}
-		if f.audience == "user" {
-			return fmt.Sprintf("service_facts[%d]: %q is for the user — send it as the task result", i, formID), nil
+		if why != "" {
+			return fmt.Sprintf("service_facts[%d]: %s", i, why), nil
 		}
 		if f.values, err = json.Marshal(values); err != nil {
 			return "", err
@@ -69,11 +63,30 @@ func storeServiceFacts(ctx context.Context, tx pgx.Tx, t task, prorab string, ra
 	}
 	for _, f := range facts {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO service_facts (service_id, form_id, schema_version, audience, task_id, user_id, prorab, values)
+			INSERT INTO service_facts (service_id, form_id, schema_version, audience, task_id, user_id, writer, values)
 			SELECT s.id, $2, $3, $4, $5, $6, $7, $8 FROM services s WHERE s.code = $1`,
-			t.TargetService, f.formID, f.version, f.audience, t.ID, t.UserID, prorab, f.values); err != nil {
+			t.TargetService, f.formID, f.version, f.audience, t.ID, t.UserID, "prorab:"+prorab, f.values); err != nil {
 			return "", err
 		}
 	}
 	return "", nil
+}
+
+// departmentForm — опубликованная форма факта подразделения не для пользователя: версия и «кому».
+// why — почему форма не годится (пусто — годится).
+func departmentForm(ctx context.Context, q querier, service, formID string) (version int, audience, why string, err error) {
+	err = q.QueryRow(ctx, `
+		SELECT f.version, f.audience FROM forms f JOIN services s ON s.id = f.service_id
+		WHERE f.form_id = $1 AND f.kind = 'fact' AND f.status = 'published' AND s.code = $2
+		ORDER BY f.version DESC LIMIT 1`, formID, service).Scan(&version, &audience)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, "", fmt.Sprintf("%q is not a fact form of this department", formID), nil
+	}
+	if err != nil {
+		return 0, "", "", err
+	}
+	if audience == "user" {
+		return 0, "", fmt.Sprintf("%q is for the user — send it as the task result", formID), nil
+	}
+	return version, audience, "", nil
 }

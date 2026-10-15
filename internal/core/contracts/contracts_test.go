@@ -126,6 +126,7 @@ func TestManifestRejections(t *testing.T) {
 		{"bad module_id", "module_id: taleweaver/story-engine", "module_id: Taleweaver Engine"},
 		{"form_id without version", "form_id: taleweaver.character.v1", "form_id: taleweaver.character"},
 		{"zero rate_to_base", "rate_to_base: 150", "rate_to_base: 0"},
+		{"audience with spaces (ADR-65)", "audience: adm", "audience: два слова"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
