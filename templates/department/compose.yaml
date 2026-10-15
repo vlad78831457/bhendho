@@ -1,0 +1,5 @@
+services:
+  check:
+    build: {context: ., dockerfile: check.Dockerfile}
+  worker-test:
+    build: {context: ., dockerfile: worker/Dockerfile, target: test}

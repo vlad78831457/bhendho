@@ -1,0 +1,35 @@
+# Паспорт подразделения (ADR-34, ADR-43). Замените example на код своего подразделения во всех файлах.
+module_id: example/department
+name: Пример подразделения
+version: 0.1.0
+mode: worker_service
+worker:
+  runtime: python
+  target_service: example
+capabilities:
+  needs_llm: false
+  offline_autonomous: true
+forms_provided:
+  # Факт пользователя — то, что человек создаёт и хранит у себя.
+  - form_id: example.note.v1
+    kind: fact
+    title: Заметка
+    schema_file: forms/note.json
+  # Задача — работа подразделения; резерв в GC, списание по счёту в единицах.
+  - form_id: example.run.v1
+    kind: task
+    title: Обработать заметку
+    schema_file: forms/run.json
+    base_price_gc: 10
+    user_marks: [role]               # ADR-68: роль пользователя придёт прорабу в снимке
+    result: {fact_kind: example.note.v1, publish: auto}
+  # Память подразделения — для админа, пользователь её не видит (ADR-65).
+  - form_id: example.spend.v1
+    kind: fact
+    title: Расход подразделения
+    schema_file: forms/spend.json
+    audience: adm
+worker_accounting:
+  base_unit: {name: chars, rate_gc: 0.01}
+  extra_units:
+    - {name: calls, rate_to_base: 100}
