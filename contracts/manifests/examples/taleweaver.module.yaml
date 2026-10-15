@@ -25,6 +25,7 @@ forms_provided:
     title: Начать новую сказку
     schema_file: forms/generate_start.json
     base_price_gc: 150
+    user_marks: [role]
   - form_id: taleweaver.generate_continue.v1
     kind: task
     title: Продолжить сказку после выбора

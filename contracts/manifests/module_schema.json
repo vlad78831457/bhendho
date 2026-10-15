@@ -57,6 +57,7 @@
           "schema_file": { "type": "string" },
           "base_price_gc": { "type": "number", "minimum": 0, "default": 0 },
           "audience": { "type": "string", "minLength": 1, "maxLength": 40, "pattern": "^\\S+$", "default": "user", "description": "кому факт (ADR-65): user — пользователю, любое другое слово — в память подразделения" },
+          "user_marks": { "type": "array", "items": { "enum": ["role"] }, "uniqueItems": true, "description": "пометки пользователя, которые ядро кладёт в снимок задачи (ADR-68): role — user | tester | admin" },
           "result": {
             "type": "object",
             "description": "Факт-результат задачи (ADR-51): новый факт или новая версия факта из поля versions_field",

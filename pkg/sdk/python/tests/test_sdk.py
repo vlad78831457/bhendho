@@ -62,6 +62,7 @@ def test_example_blank_parses_and_is_frozen() -> None:
     )
     blank = Blank.model_validate(raw)
     assert blank.system.form_id == "taleweaver.generate_start.v1"
+    assert blank.user_marks == {"role": "user"}
     with pytest.raises(ValueError):
         blank.system.form_id = "x"  # type: ignore[misc]
 
