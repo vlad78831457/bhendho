@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { DepartmentFactsPage, DepartmentsPage, SettingsPage } from "./pages/Admin";
 import { AuthPage, CatalogPage, FactPage, FactsPage, FormPage, TaskPage, TasksPage, WalletPage } from "./pages/Pages";
 import { useSession } from "./session";
 
@@ -38,7 +39,7 @@ function Network() {
 export function App() {
   const { api, user } = useSession();
   const hash = useHash();
-  const [, route, arg] = hash.split("/");
+  const [, route, arg, arg2] = hash.split("/");
 
   if (!api.authed) return <main className="container"><AuthPage /></main>;
   if (!user) return <main className="container"><p className="muted">Загрузка…</p></main>;
@@ -61,6 +62,9 @@ export function App() {
     case "facts": page = <FactsPage />; break;
     case "fact": page = <FactPage key={arg} id={arg ?? ""} />; break;
     case "wallet": page = <WalletPage />; break;
+    case "depts": page = <DepartmentsPage />; break;
+    case "dept": page = <DepartmentFactsPage key={`${arg}/${arg2}`} service={decodeURIComponent(arg ?? "")} formId={decodeURIComponent(arg2 ?? "")} />; break;
+    case "settings": page = <SettingsPage />; break;
     default: page = <CatalogPage />;
   }
   const link = (to: string, label: string) => (
@@ -75,6 +79,8 @@ export function App() {
           {link("tasks", "Задачи")}
           {link("facts", "Данные")}
           {link("wallet", "Кошелёк")}
+          {link("depts", "Подразделения")}
+          {link("settings", "Настройки")}
         </nav>
         <div className="me">
           <Network />
