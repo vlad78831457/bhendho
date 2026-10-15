@@ -88,6 +88,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/services/{service}/facts", s.admin(s.adminFacts))
 	mux.HandleFunc("POST /api/v1/admin/services/{service}/facts", s.admin(s.adminWriteFact))
 	mux.HandleFunc("GET /api/v1/admin/settings", s.admin(s.adminSettings))
+	mux.HandleFunc("GET /api/v1/admin/export", s.admin(s.adminExport))
 
 	mux.HandleFunc("POST /api/v1/facts", s.user(s.createFact))
 	mux.HandleFunc("GET /api/v1/facts", s.user(s.listFacts))
