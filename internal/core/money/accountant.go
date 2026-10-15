@@ -17,6 +17,8 @@ type Rates struct {
 	BaseUnit string                     `json:"base_unit"`
 	RateGC   decimal.Decimal            `json:"rate_gc"`
 	ToBase   map[string]decimal.Decimal `json:"to_base,omitempty"`
+	// Overdraft — множитель крышки, действовавший при создании задачи (ADR-69); пусто — из настроек.
+	Overdraft *decimal.Decimal `json:"overdraft_factor,omitempty"`
 }
 
 // Line — строка счёта воркера.

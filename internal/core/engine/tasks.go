@@ -229,6 +229,12 @@ func (e *Engine) insertTask(ctx context.Context, tx pgx.Tx, n newTask) (task, er
 		for _, u := range a.ExtraUnits {
 			rates.ToBase[u.Name] = u.RateToBase
 		}
+		// Задача запоминает множитель минуса, действующий сейчас (ADR-69).
+		factor, err := e.overdraftFactor(ctx, tx)
+		if err != nil {
+			return task{}, err
+		}
+		rates.Overdraft = &factor
 	}
 
 	id := uuid.New()

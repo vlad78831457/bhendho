@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"offgrid/core/internal/core/auth"
 )
@@ -83,4 +84,30 @@ func (s *Server) adminExport(w http.ResponseWriter, r *http.Request, _ uuid.UUID
 	if err := s.eng.ExportDB(r.Context(), w, from, to); err != nil {
 		s.log.Error("export", "err", err) // заголовки уже ушли — архив оборван, клиент увидит битый файл
 	}
+}
+
+func (s *Server) adminTariffs(w http.ResponseWriter, r *http.Request, _ uuid.UUID) {
+	t, err := s.eng.AdminTariffs(r.Context())
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
+// adminSetTariff — {scope, target, value}; value null — вернуть как в паспорте или настройках (ADR-69).
+func (s *Server) adminSetTariff(w http.ResponseWriter, r *http.Request, u uuid.UUID) {
+	var req struct {
+		Scope  string           `json:"scope"`
+		Target string           `json:"target"`
+		Value  *decimal.Decimal `json:"value"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := s.eng.SetTariff(r.Context(), u, req.Scope, req.Target, req.Value); err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.adminTariffs(w, r, u)
 }

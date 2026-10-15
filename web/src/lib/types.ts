@@ -194,6 +194,14 @@ export interface AdminService {
   forms: AdminForm[];
 }
 
+/** Тарифы (ADR-69): что админ может поменять, и журнал изменений. */
+export interface Tariffs {
+  forms: { service: string; form_id: string; title: string; manifest_price: string; price: string; override: boolean }[];
+  units: { service: string; unit: string; base: boolean; manifest_rate: string; rate: string; override: boolean }[];
+  overdraft_factor: { config: string; value: string; override: boolean };
+  history: { scope: string; target: string; value: string | null; writer: string; created_at: string }[];
+}
+
 /** Факт подразделения: семь полей ядра и содержимое, которое ядро не понимает. */
 export interface ServiceFact {
   id: number;

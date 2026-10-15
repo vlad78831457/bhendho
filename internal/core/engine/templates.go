@@ -40,8 +40,11 @@ type template struct {
 }
 
 const templateSelect = `
-	SELECT f.form_id, f.version, f.kind, f.title, f.meta_ui, f.price::text, f.currency_id, f.status,
-	       f.service_id, COALESCE(s.code, ''), s.accounting, f.result_spec
+	SELECT f.form_id, f.version, f.kind, f.title, f.meta_ui,
+	       COALESCE((SELECT value FROM tariffs WHERE scope = 'form_price' AND target = f.form_id), f.price)::numeric(15,4)::text,
+	       f.currency_id, f.status, f.service_id, COALESCE(s.code, ''), s.accounting, f.result_spec,
+	       (SELECT jsonb_object_agg(split_part(target, ':', 2), value) FROM tariffs
+	        WHERE scope = 'unit_rate' AND value IS NOT NULL AND split_part(target, ':', 1) = s.code)
 	FROM forms f LEFT JOIN services s ON s.id = f.service_id`
 
 func scanTemplate(row pgx.Row) (template, error) {
@@ -51,9 +54,10 @@ func scanTemplate(row pgx.Row) (template, error) {
 		price    string
 		acctJSON []byte
 		resJSON  []byte
+		unitsRaw []byte
 	)
 	if err := row.Scan(&t.FormID, &t.Version, &t.Kind, &t.Title, &meta, &price, &t.Currency, &t.Status,
-		&t.ServiceID, &t.ServiceCode, &acctJSON, &resJSON); err != nil {
+		&t.ServiceID, &t.ServiceCode, &acctJSON, &resJSON, &unitsRaw); err != nil {
 		return t, err
 	}
 	t.Price = decimal.RequireFromString(price)
@@ -67,6 +71,9 @@ func scanTemplate(row pgx.Row) (template, error) {
 	if len(acctJSON) > 0 && string(acctJSON) != "null" {
 		t.Accounting = &modules.Accounting{}
 		if err := json.Unmarshal(acctJSON, t.Accounting); err != nil {
+			return t, err
+		}
+		if err := applyUnitRates(t.Accounting, unitsRaw); err != nil {
 			return t, err
 		}
 	}
@@ -200,4 +207,25 @@ func metaWithPrice(t template) map[string]any {
 		meta["price_gc"] = p
 	}
 	return meta
+}
+
+// applyUnitRates — курсы единиц из тарифов админа поверх паспорта (ADR-69): для основной единицы — GC за единицу,
+// для дополнительной — сколько основных в ней.
+func applyUnitRates(a *modules.Accounting, raw []byte) error {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var over map[string]decimal.Decimal
+	if err := json.Unmarshal(raw, &over); err != nil {
+		return err
+	}
+	if v, ok := over[a.BaseUnit.Name]; ok {
+		a.BaseUnit.RateGC = v
+	}
+	for i, u := range a.ExtraUnits {
+		if v, ok := over[u.Name]; ok {
+			a.ExtraUnits[i].RateToBase = v
+		}
+	}
+	return nil
 }

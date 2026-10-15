@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -56,10 +57,35 @@ func TestAdminPanelOverHTTP(t *testing.T) {
 	}
 	s.call("GET", "/api/v1/admin/services/taleweaver/facts", admin, nil, http.StatusUnprocessableEntity)
 
+	// Тарифы (ADR-69): цена бланка меняется без перезапуска и сбрасывается.
+	s.call("GET", "/api/v1/admin/tariffs", user, nil, http.StatusForbidden)
+	tr := s.call("PUT", "/api/v1/admin/tariffs", admin, map[string]any{"scope": "form_price", "target": "taleweaver.generate_start.v1", "value": "175"}, http.StatusOK)
+	if !hasPrice(tr, "taleweaver.generate_start.v1", "175.0000", true) {
+		t.Fatalf("tariff set: %v", tr["forms"])
+	}
+	if tpl := s.call("GET", "/api/v1/forms/taleweaver.generate_start.v1", user, nil, http.StatusOK); fmt.Sprint(tpl["meta_ui"].(map[string]any)["price_gc"]) != "175" {
+		t.Fatalf("template price: %v", tpl["meta_ui"])
+	}
+	tr = s.call("PUT", "/api/v1/admin/tariffs", admin, map[string]any{"scope": "form_price", "target": "taleweaver.generate_start.v1", "value": nil}, http.StatusOK)
+	if !hasPrice(tr, "taleweaver.generate_start.v1", "150.0000", false) {
+		t.Fatalf("tariff reset: %v", tr["forms"])
+	}
+	s.call("PUT", "/api/v1/admin/tariffs", admin, map[string]any{"scope": "overdraft_factor", "value": "0.5"}, http.StatusUnprocessableEntity)
+
 	// Настройки — числа и включатели, без секретов.
 	st := s.call("GET", "/api/v1/admin/settings", admin, nil, http.StatusOK)
 	raw, _ := json.Marshal(st)
 	if st["overdraft_factor"] != "1.5" || strings.Contains(string(raw), "secret") || strings.Contains(string(raw), "postgres://") {
 		t.Fatalf("settings: %s", raw)
 	}
+}
+
+func hasPrice(tariffs map[string]any, formID, price string, override bool) bool {
+	for _, f := range tariffs["forms"].([]any) {
+		m := f.(map[string]any)
+		if m["form_id"] == formID {
+			return m["price"] == price && m["override"] == override
+		}
+	}
+	return false
 }
