@@ -204,6 +204,14 @@ export class Api {
     this.request<ServiceFact>("POST", `/api/v1/admin/services/${encodeURIComponent(service)}/facts`, { form_id: formId, values });
   adminSettings = () => this.request<Record<string, unknown>>("GET", "/api/v1/admin/settings");
   adminTariffs = () => this.request<Tariffs>("GET", "/api/v1/admin/tariffs");
+  // Витрина (ADR-74).
+  adminShowcase = () =>
+    this.request<{ items: { id: string; fact_id: string; kind: string; language: string; position: number; values: Record<string, unknown> }[] }>(
+      "GET", "/api/v1/admin/showcase",
+    ).then((r) => r.items);
+  adminAddShowcase = (factId: string, language: string, position: number) =>
+    this.request<unknown>("POST", "/api/v1/admin/showcase", { fact_id: factId, language, position });
+  adminRemoveShowcase = (id: string) => this.request<void>("DELETE", `/api/v1/admin/showcase/${encodeURIComponent(id)}`);
   /** Ключ подразделения (ADR-70): показывается один раз. */
   adminDepartmentKey = (code: string, name: string) =>
     this.request<{ code: string; name: string; key: string }>("POST", "/api/v1/admin/departments/keys", { code, name });

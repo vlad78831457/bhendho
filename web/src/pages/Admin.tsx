@@ -279,3 +279,57 @@ export function TariffsPage() {
     </>
   );
 }
+
+/** Витрина (ADR-74): свои опубликованные факты админа на посадочную страницу, по языкам и порядку. */
+export function ShowcasePage() {
+  const { api } = useSession();
+  const { data, error, reload } = useLoad(() => Promise.all([api.adminShowcase(), api.facts()]), [api]);
+  const [factId, setFactId] = useState("");
+  const [language, setLanguage] = useState("ru");
+  const [position, setPosition] = useState("0");
+  const [message, setMessage] = useState("");
+  if (!data) return <Loading error={error} />;
+  const [items, mine] = data;
+  const add = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.adminAddShowcase(factId, language.trim(), Number(position) || 0);
+      setMessage("На витрине.");
+      reload();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    }
+  };
+  const label = (v: Record<string, unknown>) => String(v.title ?? v.name ?? "") || "без названия";
+  return (
+    <>
+      <h1>Витрина</h1>
+      <p className="muted">Ваши опубликованные факты для посадочной страницы. Посетитель видит витрину своего языка.</p>
+      <form onSubmit={add} className="card">
+        <label>Факт{" "}
+          <select value={factId} onChange={(e) => setFactId(e.target.value)}>
+            <option value="">—</option>
+            {mine.filter((f) => f.published_version).map((f) => (
+              <option key={f.fact_id} value={f.fact_id}>{f.kind} · {f.fact_id.slice(0, 8)}</option>
+            ))}
+          </select>
+        </label>{" "}
+        <label>Язык <input value={language} onChange={(e) => setLanguage(e.target.value)} size={3} /></label>{" "}
+        <label>Порядок <input value={position} onChange={(e) => setPosition(e.target.value)} size={3} inputMode="numeric" /></label>{" "}
+        <button type="submit" disabled={!factId}>На витрину</button>
+        {message && <p role="status">{message}</p>}
+      </form>
+      <table>
+        <thead><tr><th>Язык</th><th>Порядок</th><th>Что</th><th /></tr></thead>
+        <tbody>
+          {items.map((it) => (
+            <tr key={it.id}>
+              <td>{it.language}</td><td>{it.position}</td><td>{label(it.values)} <span className="muted small">{it.kind}</span></td>
+              <td><button type="button" className="ghost small" onClick={() => void api.adminRemoveShowcase(it.id).then(reload)}>Убрать</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}

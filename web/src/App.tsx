@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { DepartmentFactsPage, DepartmentsPage, SettingsPage, TariffsPage } from "./pages/Admin";
+import { DepartmentFactsPage, DepartmentsPage, SettingsPage, ShowcasePage, TariffsPage } from "./pages/Admin";
 import { AuthPage, CatalogPage, FactPage, FactsPage, FormPage, TaskPage, TasksPage, WalletPage } from "./pages/Pages";
 import { useSession } from "./session";
 
@@ -66,6 +66,7 @@ export function App() {
     case "dept": page = <DepartmentFactsPage key={`${arg}/${arg2}`} service={decodeURIComponent(arg ?? "")} formId={decodeURIComponent(arg2 ?? "")} />; break;
     case "settings": page = <SettingsPage />; break;
     case "tariffs": page = <TariffsPage />; break;
+    case "showcase": page = <ShowcasePage />; break;
     default: page = <CatalogPage />;
   }
   const link = (to: string, label: string) => (
@@ -82,6 +83,7 @@ export function App() {
           {link("wallet", "Кошелёк")}
           {link("depts", "Подразделения")}
           {link("tariffs", "Тарифы")}
+          {link("showcase", "Витрина")}
           {link("settings", "Настройки")}
         </nav>
         <div className="me">
