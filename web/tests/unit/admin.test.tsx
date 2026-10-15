@@ -6,7 +6,7 @@ import { SessionProvider } from "../../src/session";
 
 // Простая панель админа (ADR-66): подразделения, память подразделения, настройки.
 const services = [{
-  code: "taleweaver", title: "Сказки", module_id: "taleweaver/story-engine", module_version: "0.1.0",
+  code: "taleweaver", title: "Сказки", module_id: "taleweaver/story-engine", module_version: "0.1.0", enabled: true,
   forms: [
     { form_id: "taleweaver.character.v1", version: 1, kind: "fact", audience: "user", title: "Персонаж", price: "0.0000", fields: { name: { type: "string" } } },
     { form_id: "taleweaver.spend.v1", version: 1, kind: "fact", audience: "adm", title: "Расход", price: "0.0000", fields: { model: { type: "string" } } },
@@ -26,6 +26,8 @@ function adminApi(calls: string[]) {
     else if (u.includes("/facts") && init?.method === "POST") body = { ...facts[0], id: 2 };
     else if (u.includes("/facts")) body = { items: facts };
     else if (u.endsWith("/api/v1/admin/settings")) body = { overdraft_factor: "1.5", max_attempts: 5 };
+    else if (u.endsWith("/api/v1/admin/departments/keys")) body = { code: "echo", name: "main", key: "dk_123" };
+    else if (u.endsWith("/api/v1/admin/services/taleweaver")) return new Response(null, { status: 204 });
     else if (u.endsWith("/api/v1/admin/tariffs")) body = {
       forms: [{ service: "taleweaver", form_id: "taleweaver.generate_start.v1", title: "Сказка", manifest_price: "150.0000", price: "150.0000", override: false }],
       units: [{ service: "taleweaver", unit: "images", base: false, manifest_rate: "20000", rate: "20000", override: false }],
@@ -90,4 +92,17 @@ test("tariffs: a new price is sent and applies to new tasks", async () => {
   fireEvent.click(screen.getAllByText("Сохранить")[0]);
   expect(await screen.findByText("Сохранено. Действует для новых задач.")).toBeTruthy();
   expect(calls).toContain('PUT /api/v1/admin/tariffs {"scope":"form_price","target":"taleweaver.generate_start.v1","value":"199.5"}');
+});
+
+test("departments: a key is issued once and a department is switched off", async () => {
+  const calls: string[] = [];
+  location.hash = "#/depts";
+  render(<SessionProvider api={adminApi(calls)}><App /></SessionProvider>);
+  await screen.findByText("Сказки");
+  fireEvent.change(screen.getByLabelText(/Код/), { target: { value: "echo" } });
+  fireEvent.click(screen.getByText("Выдать ключ"));
+  expect(await screen.findByText(/dk_123/)).toBeTruthy();
+  fireEvent.click(screen.getByText("Выключить"));
+  await screen.findByText("Сказки");
+  expect(calls).toContain('PUT /api/v1/admin/services/taleweaver {"enabled":false}');
 });

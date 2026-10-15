@@ -115,7 +115,7 @@ func serve(ctx context.Context, log *slog.Logger) error {
 			return err
 		}
 		hub := realtime.NewHub(pool, cfg.WSPingInterval, cfg.WSOrigins, log)
-		eng := engine.New(pool, cfg, hub)
+		eng := engine.New(pool, cfg, hub).WithContracts(validator) // подразделения регистрируются сами (ADR-70)
 		if cfg.StorageDir != "" {
 			eng.WithFiles(files.Local{Dir: cfg.StorageDir}) // ADR-60: каталог — общий том реплик ядра
 			log.Info("file storage enabled", "dir", cfg.StorageDir)
