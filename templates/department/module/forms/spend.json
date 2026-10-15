@@ -1,0 +1,1 @@
+{"title": "Расход", "fields_rules": {"chars": {"type": "int"}, "role": {"type": "string"}}}

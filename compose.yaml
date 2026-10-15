@@ -79,6 +79,13 @@ services:
       dockerfile: pkg/sdk/python/Dockerfile
     profiles: ["test"]
 
+  # Заготовка подразделения (ADR-71): прораб против SDK из этого репозитория
+  template-test:
+    build:
+      context: .
+      dockerfile: templates/department/local-test.Dockerfile
+    profiles: ["test"]
+
   # Фронт движка (ADR-64): tsc + vitest
   web-test:
     build:

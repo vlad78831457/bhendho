@@ -62,8 +62,10 @@ func main() {
 		err = promoCodes(ctx, args)
 	case "user-role":
 		err = userRole(ctx, args)
+	case "check-module":
+		err = checkModule(args)
 	default:
-		err = fmt.Errorf("unknown command %q (serve | migrate | issue-token | promo-issuer | promo-codes | user-role)", cmd)
+		err = fmt.Errorf("unknown command %q (serve | migrate | issue-token | promo-issuer | promo-codes | user-role | check-module)", cmd)
 	}
 	if err != nil {
 		log.Error("core stopped", "cmd", cmd, "err", err)
@@ -284,6 +286,26 @@ func promoCodes(ctx context.Context, args []string) error {
 		}
 		return nil
 	})
+}
+
+// checkModule — паспорт и формы подразделения теми же правилами, что при регистрации (ADR-71); без базы.
+func checkModule(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: core check-module <dir with module.yaml>")
+	}
+	v, err := contracts.Load()
+	if err != nil {
+		return err
+	}
+	m, err := modules.Load(args[0], v)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("ok: %s %s, подразделение %s\n", m.Manifest.ModuleID, m.Manifest.Version, m.TargetService())
+	for _, f := range m.Forms {
+		fmt.Printf("  %s  %s  кому: %s\n", f.Ref.FormID, f.Ref.Kind, f.Ref.AudienceOrUser())
+	}
+	return nil
 }
 
 // userRole — роль пользователя (ADR-61): только отсюда, через API роль не меняется.

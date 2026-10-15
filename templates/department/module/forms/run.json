@@ -1,0 +1,4 @@
+{"title": "Обработать заметку", "category": "Пример", "fields_rules": {
+  "note": {"type": "fact_ref", "required": true, "expected_fact_kind": "example.note.v1"},
+  "repeat": {"type": "int", "min": 1, "max": 5}
+}}
