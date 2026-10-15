@@ -101,6 +101,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/facts/{id}", s.user(s.getFact))
 	mux.HandleFunc("PUT /api/v1/facts/{id}", s.user(s.updateFact))
 	mux.HandleFunc("POST /api/v1/facts/{id}/publish", s.user(s.publishFact))
+	// Поделиться (ADR-73).
+	mux.HandleFunc("POST /api/v1/facts/{id}/shares", s.user(s.createShare))
+	mux.HandleFunc("GET /api/v1/facts/{id}/shares", s.user(s.listShares))
+	mux.HandleFunc("DELETE /api/v1/shares/{id}", s.user(s.revokeShare))
+	mux.HandleFunc("GET /api/v1/shared/{token}", s.shared)
+	mux.HandleFunc("POST /api/v1/shared/{token}/copy", s.user(s.copyShared))
 	mux.HandleFunc("DELETE /api/v1/facts/{id}", s.user(s.deleteFact))
 
 	mux.HandleFunc("POST /api/v1/tasks", s.user(s.createTask))
