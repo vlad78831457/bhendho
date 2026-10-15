@@ -75,7 +75,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/files/{id}/content", s.fileContent)
 
 	mux.HandleFunc("GET /api/v1/catalog", s.catalog)
-	mux.HandleFunc("GET /api/v1/views", s.views) // разметка подразделений (ADR-72)
+	mux.HandleFunc("GET /api/v1/views", s.views)       // разметка подразделений (ADR-72)
+	mux.HandleFunc("GET /api/v1/showcase", s.showcase) // витрина (ADR-74)
+	mux.HandleFunc("GET /api/v1/admin/showcase", s.admin(s.adminShowcase))
+	mux.HandleFunc("POST /api/v1/admin/showcase", s.admin(s.adminAddShowcase))
+	mux.HandleFunc("DELETE /api/v1/admin/showcase/{id}", s.admin(s.adminRemoveShowcase))
 	mux.HandleFunc("GET /api/v1/forms/{form_id}", s.template)
 
 	mux.HandleFunc("GET /api/v1/wallets", s.user(s.wallets))
