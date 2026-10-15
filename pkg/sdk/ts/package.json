@@ -1,0 +1,16 @@
+{
+  "name": "offgrid-front",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SDK фронта OFFGRID: рисует разметку подразделений (card, section, menu) на чистом DOM, без фреймворка",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.1",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2"
+  }
+}

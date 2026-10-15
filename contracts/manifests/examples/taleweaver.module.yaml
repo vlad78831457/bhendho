@@ -36,6 +36,22 @@ forms_provided:
     title: Расход на модели — для админа и бухгалтера (ADR-65)
     schema_file: forms/spend.json
     audience: adm
+views:
+  - id: hero.card
+    kind: card
+    form: taleweaver.character.v1
+    body: [{image: photo}, {title: name}, {text: description, lines: 2}, {action: open}]
+  - id: hero.section
+    kind: section
+    title: Мои герои
+    form: taleweaver.character.v1
+    card: hero.card
+    order: -created_at
+  - id: tale.new
+    kind: menu
+    title: Новая сказка
+    icon: book
+    target: {form: taleweaver.generate_start.v1}
 worker_accounting:
   base_unit:
     name: tokens

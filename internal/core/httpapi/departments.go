@@ -74,3 +74,13 @@ func (s *Server) adminSetService(w http.ResponseWriter, r *http.Request, _ uuid.
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// views — разметка общей территории фронта (ADR-72); открыта, как и каталог.
+func (s *Server) views(w http.ResponseWriter, r *http.Request) {
+	items, err := s.eng.Views(r.Context())
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}

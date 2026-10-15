@@ -29,6 +29,7 @@ type Manifest struct {
 	} `yaml:"worker"`
 	FormsProvided []FormRef   `yaml:"forms_provided"`
 	Accounting    *Accounting `yaml:"worker_accounting"`
+	Views         []View      `yaml:"views"` // ADR-72
 }
 
 // FormRef — ссылка паспорта на файл формы.
@@ -133,6 +134,9 @@ func parse(dir string, raw []byte, read func(path string) ([]byte, error), v *co
 	if err := yaml.Unmarshal(raw, &man); err != nil {
 		return Module{}, fmt.Errorf("%s: %w", dir, err)
 	}
+	if err := checkViews(man); err != nil {
+		return Module{}, fmt.Errorf("%s: %w", dir, err)
+	}
 	mod := Module{Dir: dir, Manifest: man}
 	for _, ref := range man.FormsProvided {
 		body, err := read(ref.SchemaFile)
@@ -200,4 +204,59 @@ func (r FormRef) AudienceOrUser() string {
 		return "user"
 	}
 	return r.Audience
+}
+
+// View — разметка общей территории фронта (ADR-72): card, section или menu. Ядро проверяет форму и ссылки,
+// смысла полей не знает; рисует оболочка.
+type View struct {
+	ID     string            `yaml:"id" json:"id"`
+	Kind   string            `yaml:"kind" json:"kind"`
+	Form   string            `yaml:"form,omitempty" json:"form,omitempty"`
+	Title  string            `yaml:"title,omitempty" json:"title,omitempty"`
+	Body   []map[string]any  `yaml:"body,omitempty" json:"body,omitempty"`
+	Card   string            `yaml:"card,omitempty" json:"card,omitempty"`
+	Order  string            `yaml:"order,omitempty" json:"order,omitempty"`
+	Icon   string            `yaml:"icon,omitempty" json:"icon,omitempty"`
+	Target map[string]string `yaml:"target,omitempty" json:"target,omitempty"`
+}
+
+// checkViews — ссылки разметки: id уникальны; card и section — на факт-форму этого паспорта; section — на card той же
+// формы; continue и menu.target.form — на задачу этого паспорта; menu.target.section — на раздел.
+func checkViews(m Manifest) error {
+	kinds := map[string]string{}
+	for _, f := range m.FormsProvided {
+		kinds[f.FormID] = f.Kind
+	}
+	views := map[string]View{}
+	for _, v := range m.Views {
+		if _, dup := views[v.ID]; dup {
+			return fmt.Errorf("view %q: duplicate id", v.ID)
+		}
+		views[v.ID] = v
+	}
+	for _, v := range m.Views {
+		if (v.Kind == "card" || v.Kind == "section") && kinds[v.Form] != "fact" {
+			return fmt.Errorf("view %q: form %q is not a fact form of this passport", v.ID, v.Form)
+		}
+		for _, el := range v.Body {
+			if el["action"] == "continue" && kinds[fmt.Sprint(el["form"])] != "task" {
+				return fmt.Errorf("view %q: continue form %v is not a task form of this passport", v.ID, el["form"])
+			}
+		}
+		switch v.Kind {
+		case "section":
+			c, ok := views[v.Card]
+			if !ok || c.Kind != "card" || c.Form != v.Form {
+				return fmt.Errorf("view %q: card %q must be a card of form %q", v.ID, v.Card, v.Form)
+			}
+		case "menu":
+			if f, ok := v.Target["form"]; ok && kinds[f] != "task" {
+				return fmt.Errorf("view %q: target form %q is not a task form of this passport", v.ID, f)
+			}
+			if s, ok := v.Target["section"]; ok && views[s].Kind != "section" {
+				return fmt.Errorf("view %q: target section %q is not a section", v.ID, s)
+			}
+		}
+	}
+	return nil
 }

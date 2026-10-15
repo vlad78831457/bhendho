@@ -127,6 +127,10 @@ func TestManifestRejections(t *testing.T) {
 		{"form_id without version", "form_id: taleweaver.character.v1", "form_id: taleweaver.character"},
 		{"zero rate_to_base", "rate_to_base: 150", "rate_to_base: 0"},
 		{"audience with spaces (ADR-65)", "audience: adm", "audience: два слова"},
+		{"card element with two keys (ADR-72)", "{title: name}", "{title: name, badge: name}"},
+		{"unknown card element", "{action: open}", "{video: name}"},
+		{"icon outside the shell set", "icon: book", "icon: rocket"},
+		{"menu without target", "    target: {form: taleweaver.generate_start.v1}\n", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
