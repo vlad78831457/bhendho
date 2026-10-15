@@ -68,7 +68,7 @@
     "user_marks": {
       "type": "object",
       "description": "пометки пользователя, которые запросила форма задачи (ADR-68); есть только в снимке для прораба",
-      "properties": { "role": { "enum": ["user", "tester", "admin"] } },
+      "properties": { "role": { "enum": ["user", "tester", "admin"] }, "source": { "type": "string", "maxLength": 300 } },
       "additionalProperties": false
     },
     "report": {

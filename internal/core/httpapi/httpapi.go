@@ -63,6 +63,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/oauth/exchange", s.oauthExchange)
 	mux.HandleFunc("GET /api/v1/me", s.user(s.me))
 	mux.HandleFunc("PATCH /api/v1/me", s.user(s.updateMe))
+	mux.HandleFunc("PUT /api/v1/me/source", s.user(s.setSource)) // ADR-75
 	mux.HandleFunc("POST /api/v1/me/password", s.user(s.changePassword))
 	mux.HandleFunc("GET /api/v1/me/identities", s.user(s.identities))
 	mux.HandleFunc("POST /api/v1/me/identities/{provider}/link", s.user(s.oauthLink))
@@ -194,11 +195,15 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		Email       string `json:"email"`
 		Password    string `json:"password"`
 		DisplayName string `json:"display_name"`
+		Source      string `json:"source"` // метка источника (ADR-75)
 	}
 	if !decode(w, r, &req) {
 		return
 	}
 	id, tokens, err := s.auth.Register(r.Context(), req.Email, req.Password, req.DisplayName)
+	if err == nil {
+		err = s.auth.SetSource(r.Context(), id, req.Source)
+	}
 	switch {
 	case errors.Is(err, auth.ErrWeakInput):
 		writeError(w, http.StatusUnprocessableEntity, "invalid_input", err.Error())

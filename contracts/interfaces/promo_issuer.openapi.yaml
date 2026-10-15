@@ -117,6 +117,7 @@ components:
         amount: {type: string}
         currency_id: {type: string}
         already_redeemed: {type: boolean}
+        user_source: {type: string, description: "метка источника пользователя (ADR-75) — для факта платежа у службы оплаты"}
         wallet:
           type: object
           properties:

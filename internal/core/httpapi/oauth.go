@@ -199,3 +199,18 @@ func (s *Server) oauthExchange(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"user_id": id, "tokens": tokens})
 	}
 }
+
+// setSource — метка источника после входа через внешний аккаунт (ADR-75); ставится один раз.
+func (s *Server) setSource(w http.ResponseWriter, r *http.Request, u uuid.UUID) {
+	var req struct {
+		Source string `json:"source"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := s.auth.SetSource(r.Context(), u, req.Source); err != nil {
+		s.internal(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

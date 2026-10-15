@@ -9,7 +9,10 @@ import (
 func TestPromoCodesOverHTTP(t *testing.T) {
 	s := newStack(t)
 	defer s.cleanup()
-	user := s.register("promo@example.org")
+	user := s.call("POST", "/api/v1/auth/register", "", map[string]any{"email": "promo@example.org", "password": "longpassword",
+		"source": "utm_source=vk"}, http.StatusCreated)["tokens"].(map[string]any)["access_token"].(string)
+	// Метка ставится один раз (ADR-75): вторая не перезаписывает первую.
+	s.call("PUT", "/api/v1/me/source", user, map[string]any{"source": "utm_source=ads"}, http.StatusNoContent)
 
 	// Без токена эмитента выпуск закрыт; токен пользователя — не токен эмитента.
 	s.call("POST", "/issuer/v1/promo-codes", "", map[string]any{"amount": 500}, http.StatusUnauthorized)
@@ -55,6 +58,9 @@ func TestPromoCodesOverHTTP(t *testing.T) {
 	s.call("POST", "/issuer/v1/redeem", s.issuer, map[string]any{"code": paid["code"], "user_email": "promo@example.org", "user_mark": mark}, http.StatusUnprocessableEntity)
 	s.call("POST", "/issuer/v1/redeem", s.issuer, map[string]any{"code": paid["code"], "user_mark": "tm_nope"}, http.StatusNotFound)
 	byMark := s.call("POST", "/issuer/v1/redeem", s.issuer, map[string]any{"code": paid["code"], "user_mark": mark}, http.StatusOK)
+	if byMark["user_source"] != "utm_source=vk" {
+		t.Fatalf("source in redemption: %v", byMark["user_source"])
+	}
 	if byMark["wallet"].(map[string]any)["balance"] != "570.0000" {
 		t.Fatalf("redeem by mark: %v", byMark)
 	}
