@@ -68,6 +68,7 @@ class Blank(_Frozen):
     commands: dict[str, Any] = Field(default_factory=dict)
     values: dict[str, Any]
     report: dict[str, Any] | None = None
+    user_marks: dict[str, Any] = Field(default_factory=dict)  # пометки пользователя (ADR-68)
 
 
 class ClaimedTask(_Frozen):

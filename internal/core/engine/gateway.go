@@ -101,7 +101,13 @@ func (e *Engine) Claim(ctx context.Context, acc ServiceAccount, versions []int) 
 			if err := taskStatusEvent(ctx, tx, t); err != nil {
 				return err
 			}
-			claimed = &ClaimedTask{TaskID: t.ID, Attempt: t.Attempts + 1, Blank: envelope(t, tpl, true)}
+			blank := envelope(t, tpl, true)
+			if len(tpl.UserMarks) > 0 {
+				if blank["user_marks"], err = userMarksFor(ctx, tx, t.UserID, tpl.UserMarks); err != nil {
+					return err
+				}
+			}
+			claimed = &ClaimedTask{TaskID: t.ID, Attempt: t.Attempts + 1, Blank: blank}
 			return nil
 		})
 		if err != nil {

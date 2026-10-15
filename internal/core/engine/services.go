@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -79,14 +80,15 @@ func upsertForm(ctx context.Context, tx pgx.Tx, serviceID uuid.UUID, currency st
 		priceStr  string
 		resultRaw []byte
 		audience  string
+		marks     []string
 	)
 	var resultSpec any
 	if f.Ref.Result != nil {
 		resultSpec = f.Ref.Result
 	}
 	err := tx.QueryRow(ctx, `
-		SELECT version, meta_ui, price::text, result_spec, audience FROM forms
-		WHERE form_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`, f.Ref.FormID).Scan(&version, &metaRaw, &priceStr, &resultRaw, &audience)
+		SELECT version, meta_ui, price::text, result_spec, audience, user_marks FROM forms
+		WHERE form_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`, f.Ref.FormID).Scan(&version, &metaRaw, &priceStr, &resultRaw, &audience, &marks)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
@@ -103,7 +105,7 @@ func upsertForm(ctx context.Context, tx pgx.Tx, serviceID uuid.UUID, currency st
 		if err != nil {
 			return err
 		}
-		if reflect.DeepEqual(current, fresh) && sameResult && audience == f.Ref.AudienceOrUser() &&
+		if reflect.DeepEqual(current, fresh) && sameResult && audience == f.Ref.AudienceOrUser() && slices.Equal(marks, userMarks(f.Ref)) &&
 			decimal.RequireFromString(priceStr).Equal(f.Ref.BasePrice) {
 			return nil
 		}
@@ -112,9 +114,10 @@ func upsertForm(ctx context.Context, tx pgx.Tx, serviceID uuid.UUID, currency st
 		}
 	}
 	_, err = tx.Exec(ctx, `
-		INSERT INTO forms (form_id, version, kind, service_id, title, meta_ui, price, currency_id, status, result_spec, audience)
-		VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8, 'published', $9, $10)`,
-		f.Ref.FormID, version+1, f.Ref.Kind, serviceID, f.Ref.Title, f.MetaUI, f.Ref.BasePrice.String(), currency, resultSpec, f.Ref.AudienceOrUser())
+		INSERT INTO forms (form_id, version, kind, service_id, title, meta_ui, price, currency_id, status, result_spec, audience, user_marks)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8, 'published', $9, $10, $11)`,
+		f.Ref.FormID, version+1, f.Ref.Kind, serviceID, f.Ref.Title, f.MetaUI, f.Ref.BasePrice.String(), currency, resultSpec,
+		f.Ref.AudienceOrUser(), userMarks(f.Ref))
 	return err
 }
 
@@ -218,4 +221,12 @@ func (e *Engine) EnsureServiceToken(ctx context.Context, p ProrabToken) error {
 		return fmt.Errorf("prorab %s/%s: service %w", p.Service, p.Name, ErrNotFound)
 	}
 	return nil
+}
+
+// userMarks — пометки из паспорта, никогда не nil: в базе пустой массив, а не NULL.
+func userMarks(r modules.FormRef) []string {
+	if r.UserMarks == nil {
+		return []string{}
+	}
+	return r.UserMarks
 }

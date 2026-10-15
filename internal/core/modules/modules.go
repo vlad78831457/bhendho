@@ -39,7 +39,8 @@ type FormRef struct {
 	SchemaFile string          `yaml:"schema_file"`
 	BasePrice  decimal.Decimal `yaml:"base_price_gc"`
 	Result     *ResultSpec     `yaml:"result"`
-	Audience   string          `yaml:"audience"` // ADR-65: пусто — user
+	Audience   string          `yaml:"audience"`   // ADR-65: пусто — user
+	UserMarks  []string        `yaml:"user_marks"` // ADR-68: пометки пользователя в снимок задачи
 }
 
 // ResultSpec — факт-результат задачи (ADR-51).
