@@ -17,6 +17,7 @@ func (s *Server) registerDepartment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ModuleYAML string            `json:"module_yaml"`
 		Files      map[string]string `json:"files"`
+		Prorab     engine.ProrabInfo `json:"prorab"` // ADR-77: название и описание прораба
 	}
 	if !decode(w, r, &req) {
 		return
@@ -25,7 +26,7 @@ func (s *Server) registerDepartment(w http.ResponseWriter, r *http.Request) {
 	for k, v := range req.Files {
 		files[k] = []byte(v)
 	}
-	out, err := s.eng.RegisterDepartment(r.Context(), bearer(r), []byte(req.ModuleYAML), files)
+	out, err := s.eng.RegisterDepartment(r.Context(), bearer(r), []byte(req.ModuleYAML), files, req.Prorab)
 	switch {
 	case errors.Is(err, engine.ErrNotFound):
 		writeError(w, http.StatusUnauthorized, "unauthorized", "valid department key required")
@@ -109,4 +110,13 @@ func (s *Server) adminSetProrab(w http.ResponseWriter, r *http.Request, u uuid.U
 		return
 	}
 	s.adminProrabs(w, r, u)
+}
+
+func (s *Server) adminDepartmentKeys(w http.ResponseWriter, r *http.Request, _ uuid.UUID) {
+	items, err := s.eng.DepartmentKeys(r.Context())
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }

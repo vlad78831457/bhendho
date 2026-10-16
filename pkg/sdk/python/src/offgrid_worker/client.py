@@ -77,13 +77,16 @@ class GatewayClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def register(self, module_dir: str | Path) -> dict[str, Any]:
+    async def register(
+        self, module_dir: str | Path, *, title: str = "", description: str = ""
+    ) -> dict[str, Any]:
         """Подключить подразделение (ADR-70): паспорт module.yaml и все .json рядом.
 
         Токен клиента — ключ подразделения. Ядро проверяет паспорт и формы и регистрирует их
         без перезапуска; повтор с новой версией — обновление.
         """
         body = await asyncio.to_thread(_read_module, Path(module_dir))
+        body["prorab"] = {"title": title, "description": description}  # ADR-77: как админ увидит прораба
         return dict((await self._post("/register", body)).json())
 
     async def claim(self, target_service: str, schema_versions: Sequence[int]) -> ClaimedTask | None:

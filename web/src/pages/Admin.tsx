@@ -50,6 +50,7 @@ export function ExportBox() {
 /** Ключ для нового или обновляемого подразделения (ADR-70): подразделение подключается с ним само. */
 export function DepartmentKeyBox() {
   const { api } = useSession();
+  const { data: keys, reload } = useLoad(() => api.adminDepartmentKeys(), [api]);
   const [code, setCode] = useState("");
   const [name, setName] = useState("main");
   const [result, setResult] = useState("");
@@ -58,11 +59,13 @@ export function DepartmentKeyBox() {
     try {
       const r = await api.adminDepartmentKey(code.trim(), name.trim());
       setResult(`Ключ для ${r.code} / ${r.name}: ${r.key} — сохраните сейчас, больше он не покажется.`);
+      reload();
     } catch (err) {
       setResult(err instanceof Error ? err.message : String(err));
     }
   };
   return (
+    <>
     <form onSubmit={issue} className="card">
       <h2>Ключ подразделения</h2>
       <label>Код <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="taleweaver" /></label>{" "}
@@ -70,6 +73,16 @@ export function DepartmentKeyBox() {
       <button type="submit" disabled={!code.trim()}>Выдать ключ</button>
       {result && <p role="status" className="small">{result}</p>}
     </form>
+    {keys && keys.length > 0 && (
+      <ul className="small">
+        {keys.map((k) => (
+          <li key={`${k.code}/${k.name}`}>
+            {k.code} / {k.name}: {k.connected ? `подключён` : "выдан, прораб ещё не подключался"}
+          </li>
+        ))}
+      </ul>
+    )}
+    </>
   );
 }
 
@@ -343,13 +356,18 @@ export function ProrabsBox({ service }: { service: string }) {
   const forms = [...new Set(data.map((p) => p.form_id))];
   const prorabs = [...new Set(data.map((p) => p.prorab))];
   const at = (p: string, f: string) => data.find((x) => x.prorab === p && x.form_id === f);
+  const seen = (t?: string | null) => (t ? `на связи: ${new Date(t).toLocaleString("ru-RU")}` : "ещё не выходил на связь");
   return (
     <table className="small">
       <thead><tr><th>Прораб</th>{forms.map((f) => <th key={f}>{f}</th>)}</tr></thead>
       <tbody>
         {prorabs.map((p) => (
           <tr key={p}>
-            <td>{p}</td>
+            <td>
+              <strong>{p}</strong> {at(p, forms[0])?.title}
+              <div className="muted small">{at(p, forms[0])?.description}</div>
+              <div className="muted small">{seen(at(p, forms[0])?.last_seen_at)}</div>
+            </td>
             {forms.map((f) => (
               <td key={f}>
                 <input aria-label={`приоритет ${p} ${f}`} type="number" min={0} max={1000} size={4}

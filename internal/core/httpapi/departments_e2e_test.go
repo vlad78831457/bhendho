@@ -56,12 +56,26 @@ func TestDepartmentSelfRegistration(t *testing.T) {
 	if s.catalogHas(user, "echo.run.v1") {
 		t.Fatal("echo is in the catalog before registration")
 	}
+	body["prorab"] = map[string]any{"title": "Эхо-прораб", "description": "повторяет текст — для тестов"}
 	reg := s.call("POST", "/gateway/v1/register", key, body, http.StatusOK)
 	if reg["service"] != "echo" || len(reg["forms"].([]any)) != 2 {
 		t.Fatalf("register: %v", reg)
 	}
 	if !s.catalogHas(user, "echo.run.v1") {
 		t.Fatal("registered department is not in the catalog")
+	}
+	// ADR-77: админ видит, кто подключился, с описанием, и кто ещё нет.
+	keys := map[string]map[string]any{}
+	for _, k := range s.call("GET", "/api/v1/admin/departments/keys", admin, nil, http.StatusOK)["items"].([]any) {
+		m := k.(map[string]any)
+		keys[m["code"].(string)] = m
+	}
+	if keys["echo"]["connected"] != true || keys["echo"]["title"] != "Эхо-прораб" || keys["other"]["connected"] != false {
+		t.Fatalf("keys: %v", keys)
+	}
+	pr := s.call("GET", "/api/v1/admin/services/echo/prorabs", admin, nil, http.StatusOK)["items"].([]any)
+	if p := pr[0].(map[string]any); p["description"] != "повторяет текст — для тестов" || p["last_seen_at"] == nil {
+		t.Fatalf("prorab info: %v", p)
 	}
 
 	// Тот же ключ — токен прораба: задача пользователя уходит подразделению.

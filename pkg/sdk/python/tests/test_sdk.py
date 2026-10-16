@@ -340,4 +340,5 @@ async def test_register_sends_passport_and_forms(tmp_path: Path) -> None:
     assert gw.registered == {
         "module_yaml": "module_id: test/x\n",
         "files": {"forms/run.json": '{"title": "Эхо"}'},
+        "prorab": {"title": "", "description": ""},
     }
