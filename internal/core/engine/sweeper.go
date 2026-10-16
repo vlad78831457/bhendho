@@ -73,6 +73,10 @@ func (e *Engine) Cleanup(ctx context.Context) error {
 		e.cfg.TaskRetention.Seconds()); err != nil {
 		return err
 	}
+	// Неиспользованные метки «Пополнить» старше суток — мусор (разбор 6.1): по ним уже ничего не зачислить.
+	if _, err := e.pool.Exec(ctx, `DELETE FROM topup_marks WHERE code_id IS NULL AND expires_at < now() - interval '1 day'`); err != nil {
+		return err
+	}
 	_, err := e.pool.Exec(ctx, `DELETE FROM outbox_queue WHERE status = 'sent' AND sent_at < now() - make_interval(secs => $1)`,
 		e.cfg.TaskRetention.Seconds())
 	return err

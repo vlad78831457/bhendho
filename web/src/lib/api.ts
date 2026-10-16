@@ -109,11 +109,15 @@ export class Api {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ refresh_token: token }),
           });
-          if (!res.ok) throw new Error("refresh failed");
+          // Сессию закрывает только отказ ядра; сеть пропала — токены остаются до следующей попытки (разбор 6.1).
+          if (res.status === 401 || res.status === 403) {
+            this.setTokens(null);
+            return false;
+          }
+          if (!res.ok) return false;
           this.setTokens(((await res.json()) as { tokens: Tokens }).tokens);
           return true;
         } catch {
-          this.setTokens(null);
           return false;
         } finally {
           this.refreshing = null;

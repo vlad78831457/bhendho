@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	"offgrid/core/internal/core/codes"
 	"offgrid/core/internal/core/modules"
 )
 
@@ -85,16 +86,21 @@ func upsertForm(ctx context.Context, tx pgx.Tx, serviceID uuid.UUID, currency st
 		resultRaw []byte
 		audience  string
 		marks     []string
+		owner     *uuid.UUID
 	)
 	var resultSpec any
 	if f.Ref.Result != nil {
 		resultSpec = f.Ref.Result
 	}
 	err := tx.QueryRow(ctx, `
-		SELECT version, meta_ui, price::text, result_spec, audience, user_marks FROM forms
-		WHERE form_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`, f.Ref.FormID).Scan(&version, &metaRaw, &priceStr, &resultRaw, &audience, &marks)
+		SELECT version, meta_ui, price::text, result_spec, audience, user_marks, service_id FROM forms
+		WHERE form_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`, f.Ref.FormID).Scan(&version, &metaRaw, &priceStr, &resultRaw, &audience, &marks, &owner)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
+	}
+	// Бланк принадлежит подразделению, которое его завело: чужое подразделение его не перехватит (разбор 6.1).
+	if err == nil && owner != nil && *owner != serviceID {
+		return refuse(codes.ValidationError, "form %s belongs to another department", f.Ref.FormID)
 	}
 	if err == nil {
 		var current map[string]any

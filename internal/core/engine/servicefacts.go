@@ -26,51 +26,57 @@ type serviceFact struct {
 	values   []byte
 }
 
-// storeServiceFacts — сначала проверяет все факты, потом пишет: при отказе в базе не остаётся половины.
-func storeServiceFacts(ctx context.Context, tx pgx.Tx, t task, prorab string, raw any) (reject string, err error) {
+// prepareServiceFacts — проверяет все факты, ничего не пишет: запись — writeServiceFacts, когда задача точно
+// завершается успехом (разбор 6.1: иначе отказ оставлял бы в базе факт-результат или факты подразделения).
+func prepareServiceFacts(ctx context.Context, tx pgx.Tx, t task, raw any) (facts []serviceFact, reject string, err error) {
 	if raw == nil {
-		return "", nil
+		return nil, "", nil
 	}
 	items, ok := raw.([]any)
 	if !ok {
-		return "service_facts must be a list", nil
+		return nil, "service_facts must be a list", nil
 	}
 	if len(items) > maxServiceFacts {
-		return fmt.Sprintf("service_facts: at most %d per report", maxServiceFacts), nil
+		return nil, fmt.Sprintf("service_facts: at most %d per report", maxServiceFacts), nil
 	}
-	facts := make([]serviceFact, 0, len(items))
+	facts = make([]serviceFact, 0, len(items))
 	for i, it := range items {
 		m, _ := it.(map[string]any)
 		formID, _ := m["form_id"].(string)
 		values, isObj := m["values"].(map[string]any)
 		if formID == "" || !isObj {
-			return fmt.Sprintf("service_facts[%d]: form_id and values object are required", i), nil
+			return nil, fmt.Sprintf("service_facts[%d]: form_id and values object are required", i), nil
 		}
 		f := serviceFact{formID: formID}
 		var why string
 		if f.version, f.audience, why, err = departmentForm(ctx, tx, t.TargetService, formID); err != nil {
-			return "", err
+			return nil, "", err
 		}
 		if why != "" {
-			return fmt.Sprintf("service_facts[%d]: %s", i, why), nil
+			return nil, fmt.Sprintf("service_facts[%d]: %s", i, why), nil
 		}
 		if f.values, err = json.Marshal(values); err != nil {
-			return "", err
+			return nil, "", err
 		}
 		if len(f.values) > maxServiceFactBytes {
-			return fmt.Sprintf("service_facts[%d]: values over %d bytes", i, maxServiceFactBytes), nil
+			return nil, fmt.Sprintf("service_facts[%d]: values over %d bytes", i, maxServiceFactBytes), nil
 		}
 		facts = append(facts, f)
 	}
+	return facts, "", nil
+}
+
+// writeServiceFacts — запись проверенных фактов подразделения.
+func writeServiceFacts(ctx context.Context, tx pgx.Tx, t task, prorab string, facts []serviceFact) error {
 	for _, f := range facts {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO service_facts (service_id, form_id, schema_version, audience, task_id, user_id, writer, values)
 			SELECT s.id, $2, $3, $4, $5, $6, $7, $8 FROM services s WHERE s.code = $1`,
 			t.TargetService, f.formID, f.version, f.audience, t.ID, t.UserID, "prorab:"+prorab, f.values); err != nil {
-			return "", err
+			return err
 		}
 	}
-	return "", nil
+	return nil
 }
 
 // departmentForm — опубликованная форма факта подразделения не для пользователя: версия и «кому».

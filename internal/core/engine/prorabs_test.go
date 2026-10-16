@@ -35,11 +35,21 @@ func TestProrabPriorities(t *testing.T) {
 		t.Fatal("default priority must allow claiming")
 	}
 	must(t, s.e.SetProrabPriority(s.ctx, admin, "tale", "dumb", "tale.start.v1", 5))
-	if claim(s.acc) {
-		t.Fatal("a prorab with a lower priority must not take the form")
-	}
-	if !claim(dumb) {
+	if !claim(dumb) { // заодно выходит на связь
 		t.Fatal("the top prorab must take the form")
+	}
+	if claim(s.acc) {
+		t.Fatal("a prorab with a lower priority must not take the form while the top one is online")
+	}
+	// Старший замолчал больше двух минут — очередь не ждёт его (разбор 6.1).
+	_, err = s.e.pool.Exec(s.ctx, `UPDATE service_accounts SET last_seen_at = now() - interval '10 minutes' WHERE name = 'dumb'`)
+	must(t, err)
+	if !claim(s.acc) {
+		t.Fatal("a silent top prorab must not block the queue")
+	}
+	must(t, s.e.SetProrabPriority(s.ctx, admin, "tale", "dumb", "tale.start.v1", 5))
+	if !claim(dumb) {
+		t.Fatal("the top prorab is back")
 	}
 	must(t, s.e.SetProrabPriority(s.ctx, admin, "tale", "dumb", "tale.start.v1", 0))
 	if claim(dumb) {
