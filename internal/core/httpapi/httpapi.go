@@ -99,6 +99,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/tariffs", s.admin(s.adminSetTariff))
 	mux.HandleFunc("POST /api/v1/admin/departments/keys", s.admin(s.adminDepartmentKey))
 	mux.HandleFunc("PUT /api/v1/admin/services/{service}", s.admin(s.adminSetService))
+	mux.HandleFunc("GET /api/v1/admin/services/{service}/prorabs", s.admin(s.adminProrabs))
+	mux.HandleFunc("PUT /api/v1/admin/services/{service}/prorabs", s.admin(s.adminSetProrab))
 	mux.HandleFunc("POST /gateway/v1/register", s.registerDepartment) // ключ подразделения (ADR-70)
 
 	mux.HandleFunc("POST /api/v1/facts", s.user(s.createFact))

@@ -84,3 +84,29 @@ func (s *Server) views(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
+
+func (s *Server) adminProrabs(w http.ResponseWriter, r *http.Request, _ uuid.UUID) {
+	items, err := s.eng.ProrabPriorities(r.Context(), r.PathValue("service"))
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// adminSetProrab — {prorab, form_id, priority}: уровень прораба на бланк (ADR-76).
+func (s *Server) adminSetProrab(w http.ResponseWriter, r *http.Request, u uuid.UUID) {
+	var req struct {
+		Prorab   string `json:"prorab"`
+		FormID   string `json:"form_id"`
+		Priority int    `json:"priority"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := s.eng.SetProrabPriority(r.Context(), u, r.PathValue("service"), req.Prorab, req.FormID, req.Priority); err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.adminProrabs(w, r, u)
+}

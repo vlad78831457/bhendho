@@ -204,6 +204,13 @@ export class Api {
     this.request<ServiceFact>("POST", `/api/v1/admin/services/${encodeURIComponent(service)}/facts`, { form_id: formId, values });
   adminSettings = () => this.request<Record<string, unknown>>("GET", "/api/v1/admin/settings");
   adminTariffs = () => this.request<Tariffs>("GET", "/api/v1/admin/tariffs");
+  /** Уровни прорабов (ADR-76): приоритет прораба на бланк, 0 — не берёт. */
+  adminProrabs = (service: string) =>
+    this.request<{ items: { prorab: string; form_id: string; priority: number; explicit: boolean }[] }>(
+      "GET", `/api/v1/admin/services/${encodeURIComponent(service)}/prorabs`,
+    ).then((r) => r.items);
+  adminSetProrab = (service: string, prorab: string, formId: string, priority: number) =>
+    this.request<unknown>("PUT", `/api/v1/admin/services/${encodeURIComponent(service)}/prorabs`, { prorab, form_id: formId, priority });
   // Витрина (ADR-74).
   adminShowcase = () =>
     this.request<{ items: { id: string; fact_id: string; kind: string; language: string; position: number; values: Record<string, unknown> }[] }>(
