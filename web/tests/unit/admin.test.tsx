@@ -26,6 +26,7 @@ function adminApi(calls: string[]) {
     else if (u.includes("/facts") && init?.method === "POST") body = { ...facts[0], id: 2 };
     else if (u.includes("/facts")) body = { items: facts };
     else if (u.endsWith("/api/v1/admin/settings")) body = { overdraft_factor: "1.5", max_attempts: 5 };
+    else if (u.includes("/prorabs")) body = { items: [] };
     else if (u.endsWith("/api/v1/admin/departments/keys")) body = { code: "echo", name: "main", key: "dk_123" };
     else if (u.endsWith("/api/v1/admin/services/taleweaver")) return new Response(null, { status: 204 });
     else if (u.endsWith("/api/v1/admin/tariffs")) body = {

@@ -92,6 +92,7 @@ export function DepartmentsPage() {
             {s.code} · {s.module_id} {s.module_version}{" "}
             <button type="button" className="ghost small" onClick={() => toggle(s)}>{s.enabled ? "Выключить" : "Включить"}</button>
           </p>
+          <ProrabsBox service={s.code} />
           <table>
             <thead>
               <tr><th>Бланк</th><th>Вид</th><th>Кому</th><th>Цена</th><th>Поля</th></tr>
@@ -331,5 +332,34 @@ export function ShowcasePage() {
         </tbody>
       </table>
     </>
+  );
+}
+
+/** Уровни прорабов подразделения (ADR-76): кто берёт какой бланк. Больше число — выше; 0 — не берёт. */
+export function ProrabsBox({ service }: { service: string }) {
+  const { api } = useSession();
+  const { data, reload } = useLoad(() => api.adminProrabs(service), [api, service]);
+  if (!data || !data.length) return null;
+  const forms = [...new Set(data.map((p) => p.form_id))];
+  const prorabs = [...new Set(data.map((p) => p.prorab))];
+  const at = (p: string, f: string) => data.find((x) => x.prorab === p && x.form_id === f);
+  return (
+    <table className="small">
+      <thead><tr><th>Прораб</th>{forms.map((f) => <th key={f}>{f}</th>)}</tr></thead>
+      <tbody>
+        {prorabs.map((p) => (
+          <tr key={p}>
+            <td>{p}</td>
+            {forms.map((f) => (
+              <td key={f}>
+                <input aria-label={`приоритет ${p} ${f}`} type="number" min={0} max={1000} size={4}
+                  defaultValue={at(p, f)?.priority ?? 1}
+                  onBlur={(e) => void api.adminSetProrab(service, p, f, Number(e.target.value) || 0).then(reload)} />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

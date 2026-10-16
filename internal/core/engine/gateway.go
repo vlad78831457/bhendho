@@ -67,12 +67,20 @@ func (e *Engine) Claim(ctx context.Context, acc ServiceAccount, versions []int) 
 			t, err := scanTask(tx.QueryRow(ctx, `
 				SELECT `+taskCols+` FROM system_tasks t
 				WHERE t.status = 'pending' AND t.target_service = $1 AND t.schema_version = ANY($2)
+				  -- Уровни прорабов (ADR-76): 0 — не берёт; есть действующий прораб с большим приоритетом — не берёт.
+				  AND COALESCE((SELECT pp.priority FROM prorab_priorities pp
+				        WHERE pp.service_id = $3 AND pp.prorab = $4 AND pp.form_id = t.form_id), 1) > 0
+				  AND NOT EXISTS (SELECT 1 FROM prorab_priorities pp JOIN service_accounts a
+				        ON a.service_id = pp.service_id AND a.name = pp.prorab AND a.revoked_at IS NULL
+				        WHERE pp.service_id = $3 AND pp.form_id = t.form_id AND pp.prorab <> $4
+				          AND pp.priority > COALESCE((SELECT o.priority FROM prorab_priorities o
+				              WHERE o.service_id = $3 AND o.prorab = $4 AND o.form_id = t.form_id), 1))
 				  AND (t.group_id IS NULL OR NOT EXISTS (
 				        SELECT 1 FROM system_tasks p
 				        WHERE p.group_id = t.group_id AND p.group_pos < t.group_pos
 				          AND p.status NOT IN ('completed', 'failed', 'cancelled')))
 				ORDER BY t.priority DESC, t.created_at
-				LIMIT 1 FOR UPDATE SKIP LOCKED`, acc.ServiceCode, versions))
+				LIMIT 1 FOR UPDATE SKIP LOCKED`, acc.ServiceCode, versions, acc.ServiceID, acc.Name))
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil
 			}
