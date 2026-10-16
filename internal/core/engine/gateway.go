@@ -50,6 +50,11 @@ func (e *Engine) Claim(ctx context.Context, acc ServiceAccount, versions []int) 
 	if len(versions) == 0 {
 		return nil, refuse(codes.ValidationError, "schema_versions is required")
 	}
+	// Прораб на связи (ADR-77): не чаще раза в 30 секунд, чтобы опрос очереди не писал в базу каждый раз.
+	if _, err := e.pool.Exec(ctx, `UPDATE service_accounts SET last_seen_at = now()
+		WHERE id = $1 AND (last_seen_at IS NULL OR last_seen_at < now() - interval '30 seconds')`, acc.ID); err != nil {
+		return nil, err
+	}
 	// Выключенное подразделение задач не получает (ADR-70); его задачи ждут в очереди.
 	var enabled bool
 	if err := e.pool.QueryRow(ctx, `SELECT enabled FROM services WHERE id = $1`, acc.ServiceID).Scan(&enabled); err != nil {

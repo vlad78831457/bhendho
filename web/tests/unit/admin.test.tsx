@@ -27,7 +27,9 @@ function adminApi(calls: string[]) {
     else if (u.includes("/facts")) body = { items: facts };
     else if (u.endsWith("/api/v1/admin/settings")) body = { overdraft_factor: "1.5", max_attempts: 5 };
     else if (u.includes("/prorabs")) body = { items: [] };
-    else if (u.endsWith("/api/v1/admin/departments/keys")) body = { code: "echo", name: "main", key: "dk_123" };
+    else if (u.endsWith("/api/v1/admin/departments/keys")) body = init?.method === "POST"
+      ? { code: "echo", name: "main", key: "dk_123" }
+      : { items: [{ code: "echo", name: "main", created_at: "2026-10-16T00:00:00Z", connected: false, title: "", last_seen_at: null }] };
     else if (u.endsWith("/api/v1/admin/services/taleweaver")) return new Response(null, { status: 204 });
     else if (u.endsWith("/api/v1/admin/tariffs")) body = {
       forms: [{ service: "taleweaver", form_id: "taleweaver.generate_start.v1", title: "Сказка", manifest_price: "150.0000", price: "150.0000", override: false }],

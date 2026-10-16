@@ -5,6 +5,7 @@ package engine
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,12 +19,16 @@ type ProrabPriority struct {
 	FormID   string `json:"form_id"`
 	Priority int    `json:"priority"`
 	Explicit bool   `json:"explicit"`
+	// Что прораб сообщил о себе и когда был на связи (ADR-77).
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	LastSeenAt  *time.Time `json:"last_seen_at"`
 }
 
 // ProrabPriorities — действующие прорабы подразделения × его бланки задач.
 func (e *Engine) ProrabPriorities(ctx context.Context, service string) ([]ProrabPriority, error) {
 	rows, err := e.pool.Query(ctx, `
-		SELECT a.name, f.form_id, COALESCE(pp.priority, 1), pp.priority IS NOT NULL
+		SELECT a.name, f.form_id, COALESCE(pp.priority, 1), pp.priority IS NOT NULL, a.title, a.description, a.last_seen_at
 		FROM services s
 		JOIN service_accounts a ON a.service_id = s.id AND a.revoked_at IS NULL
 		JOIN forms f ON f.service_id = s.id AND f.kind = 'task' AND f.status = 'published'
@@ -34,7 +39,7 @@ func (e *Engine) ProrabPriorities(ctx context.Context, service string) ([]Prorab
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (ProrabPriority, error) {
 		var p ProrabPriority
-		return p, r.Scan(&p.Prorab, &p.FormID, &p.Priority, &p.Explicit)
+		return p, r.Scan(&p.Prorab, &p.FormID, &p.Priority, &p.Explicit, &p.Title, &p.Description, &p.LastSeenAt)
 	})
 }
 

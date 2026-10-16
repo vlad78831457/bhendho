@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -69,7 +71,20 @@ type Registered struct {
 }
 
 // RegisterDepartment — подразделение присылает паспорт и формы со своим ключом.
-func (e *Engine) RegisterDepartment(ctx context.Context, token string, manifest []byte, files map[string][]byte) (Registered, error) {
+// ProrabInfo — что прораб сообщает о себе при подключении (ADR-77).
+type ProrabInfo struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+func clip(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
+}
+
+func (e *Engine) RegisterDepartment(ctx context.Context, token string, manifest []byte, files map[string][]byte, info ProrabInfo) (Registered, error) {
 	if e.schemas == nil {
 		return Registered{}, errors.New("department registration is off: no contracts")
 	}
@@ -93,10 +108,11 @@ func (e *Engine) RegisterDepartment(ctx context.Context, token string, manifest 
 		return Registered{}, err
 	}
 	if _, err := e.pool.Exec(ctx, `
-		INSERT INTO service_accounts (id, service_id, name, token_hash)
-		SELECT $1, id, $3, $4 FROM services WHERE code = $2
-		ON CONFLICT (service_id, name) DO UPDATE SET token_hash = EXCLUDED.token_hash, revoked_at = NULL`,
-		uuid.New(), code, name, hashToken(token)); err != nil {
+		INSERT INTO service_accounts (id, service_id, name, token_hash, title, description, last_seen_at)
+		SELECT $1, id, $3, $4, $5, $6, now() FROM services WHERE code = $2
+		ON CONFLICT (service_id, name) DO UPDATE SET token_hash = EXCLUDED.token_hash, revoked_at = NULL,
+			title = EXCLUDED.title, description = EXCLUDED.description, last_seen_at = now()`,
+		uuid.New(), code, name, hashToken(token), clip(strings.TrimSpace(info.Title), 80), clip(strings.TrimSpace(info.Description), 500)); err != nil {
 		return Registered{}, err
 	}
 	out := Registered{Service: code, Module: mod.Manifest.ModuleID, Version: mod.Manifest.Version, Forms: []string{}}
@@ -117,4 +133,31 @@ func (e *Engine) SetServiceEnabled(ctx context.Context, code string, enabled boo
 	}
 	e.catalog.reset()
 	return nil
+}
+
+// DepartmentKey — выданный ключ: подключался ли по нему прораб (ADR-77).
+type DepartmentKey struct {
+	Code       string     `json:"code"`
+	Name       string     `json:"name"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Connected  bool       `json:"connected"`
+	Title      string     `json:"title"`
+	LastSeenAt *time.Time `json:"last_seen_at"`
+}
+
+// DepartmentKeys — все действующие ключи и что известно о прорабах по ним.
+func (e *Engine) DepartmentKeys(ctx context.Context) ([]DepartmentKey, error) {
+	rows, err := e.pool.Query(ctx, `
+		SELECT k.code, k.name, k.created_at, a.id IS NOT NULL, COALESCE(a.title, ''), a.last_seen_at
+		FROM department_keys k
+		LEFT JOIN services s ON s.code = k.code
+		LEFT JOIN service_accounts a ON a.service_id = s.id AND a.name = k.name AND a.token_hash = k.token_hash
+		WHERE k.revoked_at IS NULL ORDER BY k.code, k.name`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (DepartmentKey, error) {
+		var k DepartmentKey
+		return k, r.Scan(&k.Code, &k.Name, &k.CreatedAt, &k.Connected, &k.Title, &k.LastSeenAt)
+	})
 }
