@@ -37,6 +37,7 @@ export function Markdown({ text }: { text: string }) {
         i++;
       }
       const [head, ...body] = rows;
+      if (!head) continue; // одни разделители — таблицы нет (разбор 6.1)
       blocks.push(
         <table key={i}>
           <thead><tr>{head.map((c) => <th key={c}>{inline(c)}</th>)}</tr></thead>

@@ -72,11 +72,13 @@ func (e *Engine) Claim(ctx context.Context, acc ServiceAccount, versions []int) 
 			t, err := scanTask(tx.QueryRow(ctx, `
 				SELECT `+taskCols+` FROM system_tasks t
 				WHERE t.status = 'pending' AND t.target_service = $1 AND t.schema_version = ANY($2)
-				  -- Уровни прорабов (ADR-76): 0 — не берёт; есть действующий прораб с большим приоритетом — не берёт.
+				  -- Уровни прорабов (ADR-76): 0 — не берёт; есть прораб с большим приоритетом, который на связи
+				  -- (не отозван и выходил на связь последние 2 минуты), — не берёт. Молчащий прораб очередь не держит.
 				  AND COALESCE((SELECT pp.priority FROM prorab_priorities pp
 				        WHERE pp.service_id = $3 AND pp.prorab = $4 AND pp.form_id = t.form_id), 1) > 0
 				  AND NOT EXISTS (SELECT 1 FROM prorab_priorities pp JOIN service_accounts a
 				        ON a.service_id = pp.service_id AND a.name = pp.prorab AND a.revoked_at IS NULL
+				           AND a.last_seen_at > now() - interval '2 minutes'
 				        WHERE pp.service_id = $3 AND pp.form_id = t.form_id AND pp.prorab <> $4
 				          AND pp.priority > COALESCE((SELECT o.priority FROM prorab_priorities o
 				              WHERE o.service_id = $3 AND o.prorab = $4 AND o.form_id = t.form_id), 1))
@@ -418,6 +420,14 @@ func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccou
 	if err != nil {
 		return t, err
 	}
+	// Факты подразделения (ADR-65) проверяются до записи результата, пишутся после — всё или ничего.
+	facts, reject, err := prepareServiceFacts(ctx, tx, t, serviceFacts)
+	if err != nil {
+		return t, err
+	}
+	if reject != "" {
+		return failTask(ctx, tx, t, codes.ReportInvalid, actor, reject, nil)
+	}
 	resultFact, reject, err := applyResult(ctx, tx, t, tpl, result)
 	if err != nil {
 		return t, err
@@ -425,11 +435,8 @@ func (e *Engine) settle(ctx context.Context, tx pgx.Tx, t task, acc ServiceAccou
 	if reject != "" {
 		return failTask(ctx, tx, t, codes.ReportInvalid, actor, reject, nil)
 	}
-	// Факты подразделения (ADR-65) — в его память.
-	if reject, err := storeServiceFacts(ctx, tx, t, acc.Name, serviceFacts); err != nil {
+	if err := writeServiceFacts(ctx, tx, t, acc.Name, facts); err != nil {
 		return t, err
-	} else if reject != "" {
-		return failTask(ctx, tx, t, codes.ReportInvalid, actor, reject, nil)
 	}
 	if resultFact != nil {
 		report["result_fact"] = resultFact

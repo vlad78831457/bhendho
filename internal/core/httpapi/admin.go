@@ -4,6 +4,7 @@ package httpapi
 // показывает, принимает от админа и отдаёт как есть.
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -19,6 +20,10 @@ import (
 func (s *Server) admin(h userHandler) http.HandlerFunc {
 	return s.user(func(w http.ResponseWriter, r *http.Request, u uuid.UUID) {
 		role, err := s.auth.Role(r.Context(), u)
+		if err != nil && !errors.Is(err, auth.ErrUserNotFound) {
+			s.internal(w, err) // сбой базы — не «нет прав» (разбор 6.1)
+			return
+		}
 		if err != nil || role != auth.RoleAdmin {
 			writeError(w, http.StatusForbidden, "forbidden", "admin role required")
 			return

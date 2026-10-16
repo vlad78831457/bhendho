@@ -205,7 +205,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	id, tokens, err := s.auth.Register(r.Context(), req.Email, req.Password, req.DisplayName)
 	if err == nil {
-		err = s.auth.SetSource(r.Context(), id, req.Source)
+		// Метка источника — не важнее входа: сбой пишется в лог, токены человек получает (разбор 6.1).
+		if serr := s.auth.SetSource(r.Context(), id, req.Source); serr != nil {
+			s.log.Error("set source", "user", id, "err", serr)
+		}
 	}
 	switch {
 	case errors.Is(err, auth.ErrWeakInput):
