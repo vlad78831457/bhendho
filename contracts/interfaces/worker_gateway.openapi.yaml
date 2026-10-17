@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: OFFGRID Worker Gateway
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Единственное окно обмена воркера (прораба) с ядром (ADR-18, ADR-45).
     Прораб аутентифицируется service-токеном; его идентичность попадает в locked_by.
+    Подключение: register — паспорт и формы с ключом подразделения (ADR-70).
     Цикл попытки: claim → accept (ETA) → heartbeat/progress → commit (ADR-30).
     Бланк передаётся как JSON-конверт (contracts/manifests/blank_envelope_schema.json).
 servers:
@@ -12,6 +13,32 @@ servers:
 security:
   - serviceToken: []
 paths:
+  /register:
+    post:
+      summary: Подключить подразделение — паспорт и формы с ключом подразделения (ADR-70, ADR-77)
+      description: |
+        Ключ подразделения выдаёт админ в панели на пару «код подразделения + имя прораба»; тот же ключ —
+        service-токен прораба для остальных адресов шлюза. Ядро проверяет паспорт по module_schema.json,
+        формы — правилами полей, разметку — ссылками, и регистрирует их без перезапуска. Повтор с новой
+        версией паспорта — обновление. Прораб с именем из ключа появляется в панели с title и description.
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "200":
+          description: Подразделение зарегистрировано или обновлено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Registered" }
+        "401":
+          description: Неизвестный или заменённый ключ подразделения
+        "403":
+          description: Ключ выдан на другое подразделение (worker.target_service паспорта не совпадает с кодом ключа)
+        "422":
+          description: "Паспорт, форма или разметка не прошли проверку. Тело — report: verdict VALIDATION_ERROR, причина в admin_message"
   /claim:
     post:
       summary: Забрать следующую задачу своего target_service (SKIP LOCKED)
@@ -153,6 +180,34 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/TaskState" }
   schemas:
+    RegisterRequest:
+      type: object
+      required: [module_yaml, files]
+      properties:
+        module_yaml:
+          type: string
+          description: Текст паспорта module.yaml (contracts/manifests/module_schema.json)
+        files:
+          type: object
+          description: Файлы форм по путям из forms_provided[].schema_file — путь → текст JSON
+          additionalProperties: { type: string }
+        prorab:
+          type: object
+          description: Как админ увидит прораба (ADR-77); длиннее — обрезается
+          properties:
+            title: { type: string, description: "до 80 символов" }
+            description: { type: string, description: "до 500 символов" }
+    Registered:
+      type: object
+      required: [service, module, version, forms]
+      properties:
+        service: { type: string, description: "код подразделения (target_service)" }
+        module: { type: string, description: "module_id паспорта" }
+        version: { type: string, description: "версия паспорта" }
+        forms:
+          type: array
+          items: { type: string }
+          description: Зарегистрированные form_id
     ClaimedTask:
       type: object
       required: [task_id, attempt, blank]
