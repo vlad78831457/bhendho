@@ -64,8 +64,10 @@ func main() {
 		err = userRole(ctx, args)
 	case "check-module":
 		err = checkModule(args)
+	case "healthz":
+		err = healthz()
 	default:
-		err = fmt.Errorf("unknown command %q (serve | migrate | issue-token | promo-issuer | promo-codes | user-role | check-module)", cmd)
+		err = fmt.Errorf("unknown command %q (serve | migrate | issue-token | promo-issuer | promo-codes | user-role | check-module | healthz)", cmd)
 	}
 	if err != nil {
 		log.Error("core stopped", "cmd", cmd, "err", err)
@@ -286,6 +288,28 @@ func promoCodes(ctx context.Context, args []string) error {
 		}
 		return nil
 	})
+}
+
+// healthz — проверка живости для Docker (образ distroless, без curl): ядро отвечает на /healthz своего адреса.
+// Без базы и миграций: дёшево вызывать каждые несколько секунд (разбор 6.3 orb-tale-eco).
+func healthz() error {
+	addr := os.Getenv("CORE_HTTP_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	if strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1" + addr
+	}
+	c := http.Client{Timeout: 3 * time.Second}
+	resp, err := c.Get("http://" + addr + "/healthz")
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthz: %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // checkModule — паспорт и формы подразделения теми же правилами, что при регистрации (ADR-71); без базы.
