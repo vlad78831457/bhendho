@@ -156,3 +156,13 @@ func (s *Server) topupMark(w http.ResponseWriter, r *http.Request, u uuid.UUID) 
 	}
 	writeJSON(w, http.StatusCreated, m)
 }
+
+// markOwner — служба оплаты показывает покупателю, на чей счёт пополнение (разбор безопасности 6.2).
+func (s *Server) markOwner(w http.ResponseWriter, r *http.Request, _ engine.PromoIssuer) {
+	o, err := s.eng.TopupMarkOwner(r.Context(), r.PathValue("mark"))
+	if err != nil {
+		s.promoFail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, o)
+}
