@@ -27,6 +27,7 @@ make e2e      # Python SDK против живого ядра
 make up       # ядро и Postgres; сначала: cp .env.example .env и задать JWT_SECRET
 
 docker compose exec core /core user-role --user admin@example.org --role admin   # роль: user | tester | admin (ADR-61)
+docker compose exec core /core healthz                                            # живо ли ядро: для healthcheck в Docker
 ```
 
 ## Откуда код
