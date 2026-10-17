@@ -54,6 +54,12 @@ func TestPromoCodesOverHTTP(t *testing.T) {
 	s.call("POST", "/api/v1/topup-marks", "", nil, http.StatusUnauthorized)
 	mark := s.call("POST", "/api/v1/topup-marks", user, nil, http.StatusCreated)["mark"].(string)
 	paid := s.call("POST", "/issuer/v1/promo-codes", s.issuer, map[string]any{"amount": "70", "external_id": "order-2"}, http.StatusCreated)
+	// Чей счёт пополняет метка — замаскированно, только службе оплаты (разбор безопасности 6.2).
+	s.call("GET", "/issuer/v1/marks/"+mark, user, nil, http.StatusUnauthorized)
+	if o := s.call("GET", "/issuer/v1/marks/"+mark, s.issuer, nil, http.StatusOK); o["account"] != "p***@example.org" {
+		t.Fatalf("mark owner: %v", o)
+	}
+	s.call("GET", "/issuer/v1/marks/tm_nope", s.issuer, nil, http.StatusNotFound)
 	s.call("POST", "/issuer/v1/redeem", s.issuer, map[string]any{"code": paid["code"]}, http.StatusUnprocessableEntity)
 	s.call("POST", "/issuer/v1/redeem", s.issuer, map[string]any{"code": paid["code"], "user_email": "promo@example.org", "user_mark": mark}, http.StatusUnprocessableEntity)
 	s.call("POST", "/issuer/v1/redeem", s.issuer, map[string]any{"code": paid["code"], "user_mark": "tm_nope"}, http.StatusNotFound)

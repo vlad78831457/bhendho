@@ -86,3 +86,52 @@ func (e *Engine) RedeemPromoByMark(ctx context.Context, iss PromoIssuer, mark, c
 	})
 	return res, err
 }
+
+// MarkOwner — чей счёт пополняет метка: для страницы оплаты, чтобы подсунутую чужую ссылку было видно
+// (разбор безопасности 6.2). Только замаскированный email или имя, без номера пользователя.
+type MarkOwner struct {
+	Account   string    `json:"account"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// TopupMarkOwner — владелец действующей неиспользованной метки.
+func (e *Engine) TopupMarkOwner(ctx context.Context, mark string) (MarkOwner, error) {
+	var (
+		out         MarkOwner
+		email, name string
+	)
+	err := e.pool.QueryRow(ctx, `SELECT COALESCE(u.email, ''), u.display_name, m.expires_at
+		FROM topup_marks m JOIN users u ON u.id = m.user_id
+		WHERE m.mark_hash = $1 AND m.code_id IS NULL AND m.expires_at > now()`, markHash(mark)).
+		Scan(&email, &name, &out.ExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, ErrMarkInvalid
+	}
+	if err != nil {
+		return out, err
+	}
+	out.Account = maskAccount(email, name)
+	return out, nil
+}
+
+// maskAccount: «vlad@mail.ru» → «v***@mail.ru»; без email — имя: «Иван Петров» → «И*** П***».
+func maskAccount(email, name string) string {
+	mask := func(s string) string {
+		r := []rune(s)
+		if len(r) == 0 {
+			return ""
+		}
+		return string(r[0]) + "***"
+	}
+	if local, domain, ok := strings.Cut(email, "@"); ok {
+		return mask(local) + "@" + domain
+	}
+	parts := strings.Fields(name)
+	for i := range parts {
+		parts[i] = mask(parts[i])
+	}
+	if len(parts) == 0 {
+		return "без имени"
+	}
+	return strings.Join(parts, " ")
+}

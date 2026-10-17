@@ -138,6 +138,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /issuer/v1/promo-codes/{id}", s.issuer(s.promoStatus))
 	mux.HandleFunc("POST /issuer/v1/promo-codes/{id}/revoke", s.issuer(s.revokePromo))
 	mux.HandleFunc("POST /issuer/v1/redeem", s.issuer(s.issuerRedeem))
+	mux.HandleFunc("GET /issuer/v1/marks/{mark}", s.issuer(s.markOwner)) // чей счёт — для страницы оплаты
 	return mux
 }
 

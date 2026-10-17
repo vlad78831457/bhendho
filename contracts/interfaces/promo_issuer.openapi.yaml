@@ -49,6 +49,14 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {description: Нет такого кода у этого эмитента}
         "409": {description: "`promo_not_revocable` — код уже погашен или отозван"}
+  /issuer/v1/marks/{mark}:
+    get:
+      summary: Чей счёт пополняет метка «Пополнить» — замаскированно, для страницы оплаты (разбор безопасности 6.2)
+      parameters: [{name: mark, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: "account — «v***@mail.ru» или «И*** П***», expires_at — срок метки"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {description: "`mark_invalid` — метки нет, она истекла или уже использована"}
   /issuer/v1/redeem:
     post:
       summary: Вебхук «оплачено» — зачислить код пользователю по метке «Пополнить» или по email
