@@ -272,6 +272,11 @@ export function TariffsPage() {
               label={`${u.service}: ${u.unit} — ${u.base ? "GC за единицу" : "основных единиц в одной"}`}
               manifest={u.manifest_rate} value={u.rate} override={u.override} onSave={save("unit_rate", `${u.service}:${u.unit}`)} />
           ))}
+          <tr><th colSpan={4}>Коэффициенты цены: ядро × подразделение × прораб (резерв — × ядро и подразделение)</th></tr>
+          {data.multipliers.map((m) => (
+            <TariffRow key={m.target} label={m.target === "core" ? m.title : `${m.target}${m.title ? ` — ${m.title}` : ""}`}
+              manifest="1" value={m.value} override={m.override} onSave={save("multiplier", m.target)} />
+          ))}
           <tr><th colSpan={4}>Минус</th></tr>
           <TariffRow label="Крышка списания, резервов" manifest={data.overdraft_factor.config} value={data.overdraft_factor.value}
             override={data.overdraft_factor.override} onSave={save("overdraft_factor", "")} />

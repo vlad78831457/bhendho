@@ -35,6 +35,7 @@ function adminApi(calls: string[]) {
       forms: [{ service: "taleweaver", form_id: "taleweaver.generate_start.v1", title: "Сказка", manifest_price: "150.0000", price: "150.0000", override: false }],
       units: [{ service: "taleweaver", unit: "images", base: false, manifest_rate: "20000", rate: "20000", override: false }],
       overdraft_factor: { config: "1.5", value: "1.5", override: false },
+      multipliers: [{ target: "core", title: "Ядро — k GC", value: "1", override: false }, { target: "taleweaver:middle", title: "Среднички", value: "1", override: false }],
       history: [],
     };
     else if (u.includes("/api/v1/admin/export")) return new Response("PK", { status: 200, headers: { "Content-Type": "application/zip" } });
@@ -95,6 +96,17 @@ test("tariffs: a new price is sent and applies to new tasks", async () => {
   fireEvent.click(screen.getAllByText("Сохранить")[0]);
   expect(await screen.findByText("Сохранено. Действует для новых задач.")).toBeTruthy();
   expect(calls).toContain('PUT /api/v1/admin/tariffs {"scope":"form_price","target":"taleweaver.generate_start.v1","value":"199.5"}');
+});
+
+test("tariffs: a multiplier for a prorab is sent", async () => {
+  const calls: string[] = [];
+  location.hash = "#/tariffs";
+  render(<SessionProvider api={adminApi(calls)}><App /></SessionProvider>);
+  fireEvent.change(await screen.findByLabelText("новое: taleweaver:middle — Среднички"), { target: { value: "1,2" } });
+  const row = screen.getByLabelText("новое: taleweaver:middle — Среднички").closest("tr");
+  fireEvent.click(row!.querySelector("button")!);
+  expect(await screen.findByText("Сохранено. Действует для новых задач.")).toBeTruthy();
+  expect(calls).toContain('PUT /api/v1/admin/tariffs {"scope":"multiplier","target":"taleweaver:middle","value":"1.2"}');
 });
 
 test("departments: a key is issued once and a department is switched off", async () => {

@@ -19,6 +19,11 @@ type Rates struct {
 	ToBase   map[string]decimal.Decimal `json:"to_base,omitempty"`
 	// Overdraft — множитель крышки, действовавший при создании задачи (ADR-69); пусто — из настроек.
 	Overdraft *decimal.Decimal `json:"overdraft_factor,omitempty"`
+	// Коэффициенты цены (ADR-78): Multiplier — ядра × подразделения, при создании задачи (резерв тоже × него);
+	// ProrabMultiplier — прораба, когда он берёт задачу. Пусто — 1. Воркер отчитывается как есть.
+	Multiplier       *decimal.Decimal `json:"multiplier,omitempty"`
+	Prorab           string           `json:"prorab,omitempty"`
+	ProrabMultiplier *decimal.Decimal `json:"prorab_multiplier,omitempty"`
 }
 
 // Line — строка счёта воркера.
@@ -39,7 +44,7 @@ type Bill struct {
 // ErrUnknownUnit — единица не объявлена в манифесте → REPORT_INVALID.
 var ErrUnknownUnit = errors.New("unknown worker unit")
 
-// Settle считает счёт. rates == nil — фиксированная цена: факт = резерв (ADR-29 п.7).
+// Settle считает счёт: Σ единиц × курс × коэффициенты (ADR-78). rates == nil — фиксированная цена: факт = резерв (ADR-29 п.7).
 // factor — крышка списания в долях резерва (ADR-63): 1 — не больше резерва, 1.5 — до полутора резервов.
 func Settle(lines []Line, rates *Rates, reserve, factor decimal.Decimal) (Bill, error) {
 	if rates == nil {
@@ -59,7 +64,7 @@ func Settle(lines []Line, rates *Rates, reserve, factor decimal.Decimal) (Bill, 
 		}
 		base = base.Add(l.Units.Mul(k))
 	}
-	total := base.Mul(rates.RateGC).Round(Scale)
+	total := base.Mul(rates.RateGC).Mul(rates.K()).Round(Scale)
 	charged := decimal.Min(total, reserve.Mul(factor).Round(Scale))
 	return Bill{
 		BaseUnits: base,
@@ -78,4 +83,16 @@ func (r *Rates) toBase(unit string) (decimal.Decimal, error) {
 		return k, nil
 	}
 	return decimal.Zero, fmt.Errorf("%w: %q", ErrUnknownUnit, unit)
+}
+
+// K — итоговый коэффициент цены: ядра × подразделения × прораба (ADR-78); не задан — 1.
+func (r *Rates) K() decimal.Decimal {
+	k := decimal.NewFromInt(1)
+	if r.Multiplier != nil {
+		k = k.Mul(*r.Multiplier)
+	}
+	if r.ProrabMultiplier != nil {
+		k = k.Mul(*r.ProrabMultiplier)
+	}
+	return k
 }

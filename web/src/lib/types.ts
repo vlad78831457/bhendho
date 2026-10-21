@@ -200,6 +200,8 @@ export interface Tariffs {
   forms: { service: string; form_id: string; title: string; manifest_price: string; price: string; override: boolean }[];
   units: { service: string; unit: string; base: boolean; manifest_rate: string; rate: string; override: boolean }[];
   overdraft_factor: { config: string; value: string; override: boolean };
+  /** Коэффициенты цены (ADR-78): core — k GC, <подразделение>, <подразделение>:<прораб>; по умолчанию 1. */
+  multipliers: { target: string; title: string; value: string; override: boolean }[];
   history: { scope: string; target: string; value: string | null; writer: string; created_at: string }[];
 }
 
