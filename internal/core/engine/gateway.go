@@ -118,6 +118,17 @@ func (e *Engine) Claim(ctx context.Context, acc ServiceAccount, versions []int) 
 			if err != nil {
 				return err
 			}
+			// Коэффициент прораба (ADR-78): прораб известен только сейчас — фиксируется в задаче при выдаче.
+			if t.Rates != nil {
+				pk, err := e.multiplier(ctx, tx, t.TargetService+":"+acc.Name)
+				if err != nil {
+					return err
+				}
+				t.Rates.Prorab, t.Rates.ProrabMultiplier = acc.Name, &pk
+				if _, err := tx.Exec(ctx, `UPDATE system_tasks SET rates_fixed = $2 WHERE id = $1`, t.ID, t.Rates); err != nil {
+					return err
+				}
+			}
 			if err := trace(ctx, tx, t.ID, "claim", "prorab:"+acc.Name, "", map[string]any{"account": acc.ID.String()}); err != nil {
 				return err
 			}

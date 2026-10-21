@@ -51,6 +51,14 @@ type TariffUnit struct {
 	Override bool   `json:"override"`
 }
 
+// TariffMultiplier — коэффициент цены (ADR-78): core, <подразделение> или <подразделение>:<прораб>; по умолчанию 1.
+type TariffMultiplier struct {
+	Target   string `json:"target"`
+	Title    string `json:"title"`
+	Value    string `json:"value"`
+	Override bool   `json:"override"`
+}
+
 // TariffChange — запись журнала тарифов.
 type TariffChange struct {
 	Scope     string    `json:"scope"`
@@ -62,9 +70,10 @@ type TariffChange struct {
 
 // Tariffs — всё, что админ может поменять, и последние 50 изменений.
 type Tariffs struct {
-	Forms     []TariffForm `json:"forms"`
-	Units     []TariffUnit `json:"units"`
-	Overdraft struct {
+	Forms       []TariffForm       `json:"forms"`
+	Units       []TariffUnit       `json:"units"`
+	Multipliers []TariffMultiplier `json:"multipliers"`
+	Overdraft   struct {
 		Config   string `json:"config"`
 		Value    string `json:"value"`
 		Override bool   `json:"override"`
@@ -143,6 +152,34 @@ func (e *Engine) AdminTariffs(ctx context.Context) (Tariffs, error) {
 		}
 	}
 
+	// Коэффициенты (ADR-78): ядро, подразделения, действующие прорабы.
+	addK := func(target, title string) {
+		m := TariffMultiplier{Target: target, Title: title, Value: "1"}
+		if v, ok := over["multiplier|"+target]; ok {
+			m.Value, m.Override = decimal.RequireFromString(v).String(), true
+		}
+		out.Multipliers = append(out.Multipliers, m)
+	}
+	out.Multipliers = []TariffMultiplier{}
+	addK("core", "Ядро — k GC")
+	for _, s := range svcs {
+		addK(s.Code, s.Title)
+	}
+	rows, err = e.pool.Query(ctx, `SELECT s.code, a.name, COALESCE(a.title, '') FROM service_accounts a
+		JOIN services s ON s.id = a.service_id WHERE a.revoked_at IS NULL ORDER BY s.code, a.name`)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var code, name, title string
+		if err := rows.Scan(&code, &name, &title); err != nil {
+			rows.Close()
+			return out, err
+		}
+		addK(code+":"+name, title)
+	}
+	rows.Close()
+
 	out.Overdraft.Config = e.cfg.OverdraftFactor
 	out.Overdraft.Value = e.cfg.OverdraftFactor
 	if v, ok := over["overdraft_factor|"]; ok {
@@ -200,8 +237,28 @@ func (e *Engine) SetTariff(ctx context.Context, adminID uuid.UUID, scope, target
 		if value != nil && value.LessThan(decimal.NewFromInt(1)) {
 			return bad("overdraft_factor must be at least 1")
 		}
+	case "multiplier":
+		// ADR-78: core — k GC; <подразделение>; <подразделение>:<прораб> — прораб с действующим ключом.
+		service, prorab, isProrab := strings.Cut(target, ":")
+		var ok bool
+		switch {
+		case target == "core":
+			ok = true
+		case isProrab:
+			if err := e.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM service_accounts a JOIN services s ON s.id = a.service_id
+				WHERE s.code = $1 AND a.name = $2 AND a.revoked_at IS NULL)`, service, prorab).Scan(&ok); err != nil {
+				return err
+			}
+		default:
+			if err := e.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM services WHERE code = $1)`, service).Scan(&ok); err != nil {
+				return err
+			}
+		}
+		if !ok {
+			return bad("%q is not core, <department> or <department>:<prorab>", target)
+		}
 	default:
-		return bad("scope is form_price, unit_rate or overdraft_factor")
+		return bad("scope is form_price, unit_rate, overdraft_factor or multiplier")
 	}
 	var v any
 	if value != nil {
@@ -219,4 +276,31 @@ func (e *Engine) SetTariff(ctx context.Context, adminID uuid.UUID, scope, target
 func remarshal(from, to any) bool {
 	raw, err := json.Marshal(from)
 	return err == nil && json.Unmarshal(raw, to) == nil
+}
+
+// multiplier — коэффициент цены из «Тарифов» (ADR-78): target — core, <подразделение> или <подразделение>:<прораб>;
+// админ не задавал — 1.
+func (e *Engine) multiplier(ctx context.Context, q querier, target string) (decimal.Decimal, error) {
+	var v *string
+	err := q.QueryRow(ctx, `SELECT value::text FROM tariffs WHERE scope = 'multiplier' AND target = $1`, target).Scan(&v)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return decimal.Zero, err
+	}
+	if v == nil {
+		return decimal.NewFromInt(1), nil
+	}
+	return decimal.RequireFromString(*v), nil
+}
+
+// taskMultiplier — коэффициент задачи при создании: ядра × подразделения (ADR-78).
+func (e *Engine) taskMultiplier(ctx context.Context, q querier, service string) (decimal.Decimal, error) {
+	core, err := e.multiplier(ctx, q, "core")
+	if err != nil {
+		return decimal.Zero, err
+	}
+	dept, err := e.multiplier(ctx, q, service)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return core.Mul(dept), nil
 }

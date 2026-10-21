@@ -218,14 +218,21 @@ func (e *Engine) insertTask(ctx context.Context, tx pgx.Tx, n newTask) (task, er
 	if err != nil {
 		return task{}, err
 	}
+	// Коэффициенты ядра и подразделения (ADR-78): резерв — цена бланка × k; прорабский k — при выдаче задачи.
+	k, err := e.taskMultiplier(ctx, tx, tpl.ServiceCode)
+	if err != nil {
+		return task{}, err
+	}
+	price := tpl.Price.Mul(k).Round(money.Scale)
 	// В минусе (ADR-63) не берём ни платных, ни бесплатных задач.
-	if w.available().LessThan(tpl.Price) || w.available().IsNegative() {
-		return task{}, refuse(codes.InsufficientFunds, "need %s, available %s", tpl.Price.StringFixed(4), w.available().StringFixed(4))
+	if w.available().LessThan(price) || w.available().IsNegative() {
+		return task{}, refuse(codes.InsufficientFunds, "need %s, available %s", price.StringFixed(4), w.available().StringFixed(4))
 	}
 
 	var rates *money.Rates
 	if a := tpl.Accounting; a != nil {
-		rates = &money.Rates{BaseUnit: a.BaseUnit.Name, RateGC: a.BaseUnit.RateGC, ToBase: map[string]decimal.Decimal{}}
+		rates = &money.Rates{BaseUnit: a.BaseUnit.Name, RateGC: a.BaseUnit.RateGC, ToBase: map[string]decimal.Decimal{},
+			Multiplier: &k}
 		for _, u := range a.ExtraUnits {
 			rates.ToBase[u.Name] = u.RateToBase
 		}
@@ -273,20 +280,20 @@ func (e *Engine) insertTask(ctx context.Context, tx pgx.Tx, n newTask) (task, er
 			(SELECT priority FROM users WHERE id = $2), $12, $13, $14)
 		RETURNING `+taskCols,
 		id, n.UserID, tpl.FormID, tpl.Version, tpl.ServiceCode, n.Key, n.Values, materialized,
-		w.ID, tpl.Price.String(), ratesJSON, n.GroupID, groupPos, n.RetryOf))
+		w.ID, price.String(), ratesJSON, n.GroupID, groupPos, n.RetryOf))
 	if err != nil {
 		return task{}, err
 	}
 
-	txID, err := record(ctx, tx, journal{WalletID: w.ID, Type: "reserve", Amount: tpl.Price, TaskID: &id, Rates: ratesJSON})
+	txID, err := record(ctx, tx, journal{WalletID: w.ID, Type: "reserve", Amount: price, TaskID: &id, Rates: ratesJSON})
 	if err != nil {
 		return task{}, err
 	}
-	w.Reserved = w.Reserved.Add(tpl.Price)
+	w.Reserved = w.Reserved.Add(price)
 	if err := setWallet(ctx, tx, w, true, txID); err != nil {
 		return task{}, err
 	}
-	detail := map[string]any{"reserved": tpl.Price.StringFixed(4), "schema_version": tpl.Version}
+	detail := map[string]any{"reserved": price.StringFixed(4), "schema_version": tpl.Version}
 	if n.RetryOf != nil {
 		detail["retry_of"] = n.RetryOf.String()
 	}

@@ -102,3 +102,28 @@ func TestSettleRoundsToMoneyScale(t *testing.T) {
 		t.Fatalf("bill = %+v", bill)
 	}
 }
+
+// ADR-78: коэффициенты ядра × подразделения × прораба умножают факт; единицы воркера — как есть.
+func TestSettleMultipliers(t *testing.T) {
+	lines := []Line{{Unit: "tokens", Units: d("10000")}} // 10 GC без коэффициентов
+	r := taleweaver()
+	if r.K().String() != "1" {
+		t.Fatalf("default k = %s", r.K())
+	}
+	m, pm := d("1.4"), d("0.5")
+	r.Multiplier, r.ProrabMultiplier = &m, &pm
+	bill, err := Settle(lines, r, d("150"), d("1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bill.BaseUnits.Equal(d("10000")) || !bill.Total.Equal(d("7")) || !bill.Charged.Equal(d("7")) {
+		t.Fatalf("bill = %+v", bill)
+	}
+	// Крышка по-прежнему в долях резерва.
+	big := d("3")
+	r.ProrabMultiplier = &big
+	bill, _ = Settle([]Line{{Unit: "tokens", Units: d("100000")}}, r, d("150"), d("1.5"))
+	if !bill.Charged.Equal(d("225")) || !bill.Over.Equal(d("75")) {
+		t.Fatalf("capped bill = %+v", bill)
+	}
+}
