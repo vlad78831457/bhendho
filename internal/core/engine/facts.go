@@ -28,6 +28,7 @@ type Fact struct {
 	Kind             string        `json:"kind"`
 	Origin           string        `json:"origin"`
 	PublishedVersion *int          `json:"published_version"`
+	Visibility       string        `json:"visibility"` // private | public (ADR-79)
 	Versions         []FactVersion `json:"versions"`
 	// Только в списке: статус последней версии, время создания и выбранные поля опубликованной.
 	Status    string         `json:"status,omitempty"`
@@ -172,7 +173,8 @@ func (e *Engine) DeleteFact(ctx context.Context, userID, factID uuid.UUID) error
 // GetFact — факт пользователя со всеми версиями.
 func (e *Engine) GetFact(ctx context.Context, userID, factID uuid.UUID) (Fact, error) {
 	f := Fact{ID: factID}
-	err := e.pool.QueryRow(ctx, `SELECT kind, origin FROM facts WHERE id = $1 AND user_id = $2`, factID, userID).Scan(&f.Kind, &f.Origin)
+	err := e.pool.QueryRow(ctx, `SELECT kind, origin, visibility FROM facts WHERE id = $1 AND user_id = $2`, factID, userID).
+		Scan(&f.Kind, &f.Origin, &f.Visibility)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return f, ErrNotFound
 	}
@@ -219,7 +221,7 @@ func (e *Engine) ListFacts(ctx context.Context, userID uuid.UUID, o FactListOpti
 		o.Fields = []string{}
 	}
 	rows, err := e.pool.Query(ctx, `
-		SELECT f.id, f.kind, f.origin, f.created_at, pub.version, last.status,
+		SELECT f.id, f.kind, f.origin, f.visibility, f.created_at, pub.version, last.status,
 		       (SELECT jsonb_object_agg(k, pub.values -> k) FROM unnest($3::text[]) k WHERE pub.values ? k)
 		FROM facts f
 		LEFT JOIN LATERAL (SELECT version, values FROM fact_versions v
@@ -234,7 +236,7 @@ func (e *Engine) ListFacts(ctx context.Context, userID uuid.UUID, o FactListOpti
 		var f Fact
 		var created time.Time
 		var summary []byte
-		err := r.Scan(&f.ID, &f.Kind, &f.Origin, &created, &f.PublishedVersion, &f.Status, &summary)
+		err := r.Scan(&f.ID, &f.Kind, &f.Origin, &f.Visibility, &created, &f.PublishedVersion, &f.Status, &summary)
 		f.CreatedAt = &created
 		f.Versions = []FactVersion{}
 		if err == nil && summary != nil {
@@ -253,12 +255,12 @@ func lockFact(ctx context.Context, tx pgx.Tx, userID, factID uuid.UUID) (string,
 	return kind, err
 }
 
-// checkFactValues — форма значений и живость ссылок факта (факт → факт своего владельца).
+// checkFactValues — форма значений и живость ссылок факта (факт → свой или публичный факт, ADR-79).
 func checkFactValues(ctx context.Context, tx pgx.Tx, userID uuid.UUID, t template, values map[string]any) error {
 	errs, refs := forms.Validate(t.Rules, values)
 	for _, r := range refs.Facts {
 		var kind string
-		err := tx.QueryRow(ctx, `SELECT kind FROM facts WHERE id = $1 AND user_id = $2`, r.ID, userID).Scan(&kind)
+		err := tx.QueryRow(ctx, `SELECT f.kind FROM facts f WHERE f.id = $1 AND `+refVisible, r.ID, userID).Scan(&kind)
 		if err != nil || kind != r.ExpectedKind {
 			errs = append(errs, forms.FieldError{Field: r.Field, Message: "fact not found or of another kind"})
 		}

@@ -81,6 +81,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/showcase", s.admin(s.adminShowcase))
 	mux.HandleFunc("POST /api/v1/admin/showcase", s.admin(s.adminAddShowcase))
 	mux.HandleFunc("DELETE /api/v1/admin/showcase/{id}", s.admin(s.adminRemoveShowcase))
+	mux.HandleFunc("PUT /api/v1/admin/facts/{id}/visibility", s.admin(s.adminSetVisibility)) // ADR-79
+	mux.HandleFunc("GET /api/v1/public/facts", s.user(s.publicFacts))
 	mux.HandleFunc("GET /api/v1/forms/{form_id}", s.template)
 
 	mux.HandleFunc("GET /api/v1/wallets", s.user(s.wallets))
