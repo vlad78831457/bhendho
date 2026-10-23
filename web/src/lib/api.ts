@@ -223,6 +223,9 @@ export class Api {
   adminAddShowcase = (factId: string, language: string, position: number) =>
     this.request<unknown>("POST", "/api/v1/admin/showcase", { fact_id: factId, language, position });
   adminRemoveShowcase = (id: string) => this.request<void>("DELETE", `/api/v1/admin/showcase/${encodeURIComponent(id)}`);
+  /** Видимость своего факта (ADR-79): публичный — на него ссылается любой. */
+  adminSetVisibility = (factId: string, visibility: "public" | "private") =>
+    this.request<Fact>("PUT", `/api/v1/admin/facts/${encodeURIComponent(factId)}/visibility`, { visibility });
   /** Ключ подразделения (ADR-70): показывается один раз. */
   adminDepartmentKeys = () =>
     this.request<{ items: { code: string; name: string; created_at: string; connected: boolean; title: string; last_seen_at: string | null }[] }>(

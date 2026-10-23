@@ -175,14 +175,15 @@ func (e *Engine) existingByKey(ctx context.Context, userID uuid.UUID, key string
 	return envelope(t, tpl, false), nil
 }
 
-// checkTaskRefs — при создании: факт опубликован и нужного kind, файл жив (матрица примитивов 5.3).
+// checkTaskRefs — при создании: факт свой или публичный (ADR-79), опубликован и нужного kind, файл жив
+// (матрица примитивов 5.3).
 func checkTaskRefs(ctx context.Context, tx pgx.Tx, userID uuid.UUID, refs forms.Refs) error {
 	for _, r := range refs.Facts {
 		var kind string
 		var published bool
 		err := tx.QueryRow(ctx, `
 			SELECT f.kind, EXISTS (SELECT 1 FROM fact_versions v WHERE v.fact_id = f.id AND v.status = 'published')
-			FROM facts f WHERE f.id = $1 AND f.user_id = $2`, r.ID, userID).Scan(&kind, &published)
+			FROM facts f WHERE f.id = $1 AND `+refVisible, r.ID, userID).Scan(&kind, &published)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && kind != r.ExpectedKind) {
 			return &Refusal{Code: codes.ValidationError, FieldErrors: []forms.FieldError{
 				{Field: r.Field, Message: "fact not found or of another kind"}}}

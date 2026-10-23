@@ -158,14 +158,16 @@ func (e *Engine) Claim(ctx context.Context, acc ServiceAccount, versions []int) 
 // файлов; «только написанное в бланке» (ADR-14/15/16/35).
 func materialize(ctx context.Context, tx pgx.Tx, t task, tpl template) (map[string]any, *Refusal, error) {
 	var refusal *Refusal
-	file := func(ref forms.Ref) (any, error) {
+	// owner — чей файл: файлы задачи — её пользователя, файлы внутри факта — хозяина факта (публичный
+	// факт приносит файлы админа, ADR-79).
+	file := func(ref forms.Ref, owner uuid.UUID) (any, error) {
 		var (
 			bucket, filename, mime string
 			object                 uuid.UUID
 			size                   int64
 		)
 		err := tx.QueryRow(ctx, `SELECT bucket, object_uuid, filename, size_bytes, mime FROM files
-			WHERE id = $1 AND user_id = $2 AND status = 'active'`, ref.ID, t.UserID).
+			WHERE id = $1 AND user_id = $2 AND status = 'active'`, ref.ID, owner).
 			Scan(&bucket, &object, &filename, &size, &mime)
 		if errors.Is(err, pgx.ErrNoRows) {
 			if ref.Required {
@@ -188,18 +190,19 @@ func materialize(ctx context.Context, tx pgx.Tx, t task, tpl template) (map[stri
 			return nil, nil
 		}
 		if typ == "file" {
-			return file(ref)
+			return file(ref, t.UserID)
 		}
 		var (
 			version, schema int
 			kind            string
+			owner           uuid.UUID
 			raw             []byte
 		)
 		err := tx.QueryRow(ctx, `
-			SELECT v.version, v.schema_version, f.kind, v.values FROM facts f
+			SELECT v.version, v.schema_version, f.kind, f.user_id, v.values FROM facts f
 			JOIN fact_versions v ON v.fact_id = f.id AND v.status = 'published'
-			WHERE f.id = $1 AND f.user_id = $2
-			ORDER BY v.version DESC LIMIT 1`, ref.ID, t.UserID).Scan(&version, &schema, &kind, &raw)
+			WHERE f.id = $1 AND `+refVisible+`
+			ORDER BY v.version DESC LIMIT 1`, ref.ID, t.UserID).Scan(&version, &schema, &kind, &owner, &raw)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && kind != ref.ExpectedKind) {
 			refusal = refuse(codes.FactMissing, "%s: fact %s is not published anymore", ref.Field, ref.ID)
 			return nil, nil
@@ -220,7 +223,7 @@ func materialize(ctx context.Context, tx pgx.Tx, t task, tpl template) (map[stri
 		values, err = forms.Rewrite(factTpl.Rules, values, func(typ string, inner forms.Ref) (any, error) {
 			if typ == "file" && refusal == nil {
 				inner.Field = ref.Field + "." + inner.Field
-				return file(inner)
+				return file(inner, owner)
 			}
 			return inner.ID.String(), nil
 		})

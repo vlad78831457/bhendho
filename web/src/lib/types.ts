@@ -96,6 +96,8 @@ export interface Fact {
   kind: string;
   origin: string;
   published_version: number | null;
+  /** private — ссылается только хозяин; public — любой (ADR-79). */
+  visibility?: "private" | "public";
   versions: FactVersion[];
   /** Только в списке: статус последней версии, создан, поля опубликованной версии (?fields=). */
   status?: string;

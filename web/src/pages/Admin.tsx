@@ -349,6 +349,25 @@ export function ShowcasePage() {
           ))}
         </tbody>
       </table>
+      <h2>Публичные факты</h2>
+      <p className="muted">На публичный факт любой человек ссылается в своих задачах без копии — пресеты, миры, случаи студии (ADR-79).</p>
+      <table>
+        <thead><tr><th>Факт</th><th>Видимость</th><th /></tr></thead>
+        <tbody>
+          {mine.filter((f) => f.published_version).map((f) => {
+            const pub = f.visibility === "public";
+            return (
+              <tr key={f.fact_id}>
+                <td>{f.kind} <span className="muted small">{f.fact_id.slice(0, 8)}</span></td>
+                <td>{pub ? "публичный" : "приватный"}</td>
+                <td><button type="button" className="ghost small"
+                  onClick={() => void api.adminSetVisibility(f.fact_id, pub ? "private" : "public").then(reload)}>
+                  {pub ? "Сделать приватным" : "Сделать публичным"}</button></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </>
   );
 }
