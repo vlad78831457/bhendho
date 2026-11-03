@@ -1,9 +1,9 @@
 {
   "name": "offgrid-front",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "SDK фронта OFFGRID: рисует разметку подразделений (card, section, menu) на чистом DOM, без фреймворка",
+  "description": "SDK фронта OFFGRID: разметка подразделений (card, section, menu) на чистом DOM и клиент API людей из договора (ADR-81)",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
