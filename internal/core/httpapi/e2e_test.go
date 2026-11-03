@@ -183,6 +183,9 @@ func (w *socket) next() map[string]any {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	_ = dec.Decode(&ev)
+	if want, _ := contracts.EventsVersion(); ev["v"] != want {
+		w.t.Fatalf("событие без версии реестра %q (ADR-83): %s", want, raw)
+	}
 	return ev
 }
 
