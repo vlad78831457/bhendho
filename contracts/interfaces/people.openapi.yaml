@@ -1028,7 +1028,7 @@ components:
         target: { type: object, additionalProperties: true }
     ShowcaseItem:
       type: object
-      required: [id, fact_id, kind, language, position, created_at]
+      required: [id, fact_id, kind, language, position, created_at, values]
       properties:
         id: { type: string, format: uuid }
         fact_id: { type: string, format: uuid }

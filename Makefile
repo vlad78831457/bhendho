@@ -1,5 +1,5 @@
 # bhendho — ядро OFFGRID. Всё в Docker.
-.PHONY: help build up down test e2e logs
+.PHONY: help build up down test e2e logs people-types
 
 help: ## список команд
 	@grep -E '^[a-z-]+:.*## ' Makefile | sed 's/:.*## /\t/'
@@ -25,3 +25,8 @@ e2e: ## Python SDK против живого ядра (отдельный compos
 
 logs: ## логи
 	docker compose logs -f
+
+people-types: ## типы API людей для SDK фронта из договора: pkg/sdk/ts/src/people.gen.ts (ADR-81)
+	docker compose build -q ts-sdk-test
+	docker compose run --rm --no-deps --user "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD/pkg/sdk/ts/src:/out" ts-sdk-test \
+	  sh -c 'npx openapi-typescript /contracts/people.openapi.yaml -o /out/people.gen.ts'

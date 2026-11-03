@@ -4,6 +4,8 @@
 
 ## Не выпущено
 
+- один клиент API людей: `pkg/sdk/ts/src/people.ts` с типами из договора (`people.gen.ts`, `make people-types`, проверка свежести), панель `web/` — на нём; у витрины `values` в договоре обязательное (ADR-81) (`task/cc-people-client`).
+
 - договор API людей: `contracts/interfaces/people.openapi.yaml` (1.0.0, 62 адреса); тест сверяет адреса кода с договором и каждый ответ e2e-тестов — со схемой (ADR-80). Поведение ядра не меняется (`task/bz-people-contract`).
 
 - контракт шлюза дописан: `POST /gateway/v1/register` — подключение подразделения по ключу (ADR-70, ADR-77), схемы `RegisterRequest` и `Registered`, ответы 401, 403, 422; версия контракта 0.2.0. Поведение ядра не меняется (`task/bf-gateway-register`).
