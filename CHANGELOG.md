@@ -4,6 +4,8 @@
 
 ## Не выпущено
 
+- версия шлюза задач: ядро отдаёт `X-Core-Gateway` в каждом ответе `/gateway/v1`, прораб с другой старшей версией в `X-Worker-Gateway` — 409 `gateway_version`; Python SDK шлёт и сверяет версию, `VersionMismatchError`, версия SDK = договора (0.3.0); договор шлюза 0.3.0 (ADR-82) (`task/ca-gateway-version`).
+
 - контракт шлюза дописан: `POST /gateway/v1/register` — подключение подразделения по ключу (ADR-70, ADR-77), схемы `RegisterRequest` и `Registered`, ответы 401, 403, 422; версия контракта 0.2.0. Поведение ядра не меняется (`task/bf-gateway-register`).
 - ядро перенесено из `taleweaver-app-vr-ab` (main `0912a91`): ядро платформы v0.1.0 + промокоды, OAuth, кабинет, файлы; контракты; Python SDK; спецификация и история решений ADR-01…60 (`task/ab-core`).
 - роли пользователя `user`, `tester`, `admin`: поле в базе, видно в профиле, меняется только командой `core user-role` на сервере (ADR-61) (`task/ac-roles`).

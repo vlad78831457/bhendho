@@ -1,9 +1,12 @@
 openapi: 3.1.0
 info:
   title: OFFGRID Worker Gateway
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Единственное окно обмена воркера (прораба) с ядром (ADR-18, ADR-45).
+    Версии (ADR-82): ядро говорит версию этого договора в каждом ответе — заголовок X-Core-Gateway; прораб говорит,
+    на какую собран, — X-Worker-Gateway. Другая старшая версия у прораба — 409 {error: {code: gateway_version}}:
+    обновить SDK прораба. Без X-Worker-Gateway — как раньше. Внутри старшей версии только добавляем.
     Прораб аутентифицируется service-токеном; его идентичность попадает в locked_by.
     Подключение: register — паспорт и формы с ключом подразделения (ADR-70).
     Цикл попытки: claim → accept (ETA) → heartbeat/progress → commit (ADR-30).
