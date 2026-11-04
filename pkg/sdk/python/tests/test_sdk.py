@@ -342,3 +342,35 @@ async def test_register_sends_passport_and_forms(tmp_path: Path) -> None:
         "files": {"forms/run.json": '{"title": "Эхо"}'},
         "prorab": {"title": "", "description": ""},
     }
+
+
+async def test_gateway_version_is_spoken_and_checked() -> None:
+    """ADR-82: SDK говорит версию договора шлюза; ядро другой старшей версии — понятная ошибка сразу."""
+    from offgrid_worker import GATEWAY_CONTRACT, VersionMismatchError
+
+    seen: list[str] = []
+
+    def core(major: str):
+        def handle(req: httpx.Request) -> httpx.Response:
+            seen.append(req.headers.get("X-Worker-Gateway", ""))
+            return httpx.Response(204, headers={"X-Core-Gateway": f"{major}.9.0"})
+
+        return httpx.MockTransport(handle)
+
+    async with GatewayClient(
+        "http://core", "t", retry=FAST, transport=core(GATEWAY_CONTRACT.split(".")[0])
+    ) as c:
+        assert await c.claim("tale", [1]) is None  # та же старшая — работаем
+    assert seen == [GATEWAY_CONTRACT]
+    async with GatewayClient("http://core", "t", retry=FAST, transport=core("9")) as c:
+        with pytest.raises(VersionMismatchError, match="core gateway 9.9.0"):
+            await c.claim("tale", [1])
+
+    def refused(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            409, json={"error": {"code": "gateway_version", "message": "update the worker SDK"}}
+        )
+
+    async with GatewayClient("http://core", "t", retry=FAST, transport=httpx.MockTransport(refused)) as c:
+        with pytest.raises(VersionMismatchError):
+            await c.claim("tale", [1])

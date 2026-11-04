@@ -104,7 +104,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/services/{service}", s.admin(s.adminSetService))
 	mux.HandleFunc("GET /api/v1/admin/services/{service}/prorabs", s.admin(s.adminProrabs))
 	mux.HandleFunc("PUT /api/v1/admin/services/{service}/prorabs", s.admin(s.adminSetProrab))
-	mux.HandleFunc("POST /gateway/v1/register", s.registerDepartment) // ключ подразделения (ADR-70)
+	mux.HandleFunc("POST /gateway/v1/register", gatewayVersion(s.registerDepartment)) // ключ подразделения (ADR-70)
 
 	mux.HandleFunc("POST /api/v1/facts", s.user(s.createFact))
 	mux.HandleFunc("GET /api/v1/facts", s.user(s.listFacts))
@@ -128,12 +128,12 @@ func (s *Server) Handler() http.Handler {
 		s.hub.Serve(w, r, u)
 	}))
 
-	mux.HandleFunc("POST /gateway/v1/claim", s.prorab(s.claim))
-	mux.HandleFunc("POST /gateway/v1/tasks/{id}/accept", s.prorab(s.accept))
-	mux.HandleFunc("POST /gateway/v1/tasks/{id}/heartbeat", s.prorab(s.heartbeat))
-	mux.HandleFunc("POST /gateway/v1/tasks/{id}/progress", s.prorab(s.progress))
-	mux.HandleFunc("POST /gateway/v1/tasks/{id}/commit", s.prorab(s.commit))
-	mux.HandleFunc("GET /gateway/v1/tasks/{id}/files/{file_id}", s.prorab(s.taskFile))
+	mux.HandleFunc("POST /gateway/v1/claim", gatewayVersion(s.prorab(s.claim)))
+	mux.HandleFunc("POST /gateway/v1/tasks/{id}/accept", gatewayVersion(s.prorab(s.accept)))
+	mux.HandleFunc("POST /gateway/v1/tasks/{id}/heartbeat", gatewayVersion(s.prorab(s.heartbeat)))
+	mux.HandleFunc("POST /gateway/v1/tasks/{id}/progress", gatewayVersion(s.prorab(s.progress)))
+	mux.HandleFunc("POST /gateway/v1/tasks/{id}/commit", gatewayVersion(s.prorab(s.commit)))
+	mux.HandleFunc("GET /gateway/v1/tasks/{id}/files/{file_id}", gatewayVersion(s.prorab(s.taskFile)))
 
 	// Эмитенты промокодов — службы оплаты (ADR-57), contracts/interfaces/promo_issuer.openapi.yaml.
 	mux.HandleFunc("POST /issuer/v1/promo-codes", s.issuer(s.issuePromo))

@@ -17,6 +17,14 @@ import httpx
 
 from .models import ChargeLine, ClaimedTask, CommitRequest, TaskState
 
+# Версия договора шлюза, на которую собран SDK (contracts/interfaces/worker_gateway.openapi.yaml, ADR-82);
+# версия пакета — та же. Ядро говорит свою в X-Core-Gateway; другая старшая — VersionMismatchError.
+GATEWAY_CONTRACT = "0.3.0"
+
+
+def _major(version: str) -> str:
+    return version.strip().split(".", 1)[0]
+
 
 class GatewayError(Exception):
     """Шлюз ответил ошибкой, которую повтор не исправит."""
@@ -29,6 +37,10 @@ class GatewayError(Exception):
 
 class UnauthorizedError(GatewayError):
     """Неизвестный или отозванный service-токен."""
+
+
+class VersionMismatchError(GatewayError):
+    """Ядро говорит на другой старшей версии договора шлюза (ADR-82): нужен SDK под эту версию ядра."""
 
 
 class NotOwnerError(GatewayError):
@@ -62,7 +74,7 @@ class GatewayClient:
     ) -> None:
         self._http = httpx.AsyncClient(
             base_url=base_url.rstrip("/") + "/gateway/v1",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"Authorization": f"Bearer {token}", "X-Worker-Gateway": GATEWAY_CONTRACT},
             timeout=timeout,
             transport=transport,
         )
@@ -187,6 +199,13 @@ class GatewayClient:
 
     @staticmethod
     def _check(resp: httpx.Response) -> httpx.Response:
+        core = resp.headers.get("X-Core-Gateway", "")
+        if core and _major(core) != _major(GATEWAY_CONTRACT):
+            raise VersionMismatchError(
+                resp.status_code, f"core gateway {core}, SDK {GATEWAY_CONTRACT}: {resp.text}"
+            )
+        if resp.status_code == 409 and "gateway_version" in resp.text:
+            raise VersionMismatchError(409, resp.text)
         if resp.status_code in (200, 202, 204):
             return resp
         if resp.status_code == 401:
