@@ -1,0 +1,1280 @@
+openapi: 3.1.0
+info:
+  title: OFFGRID People API
+  version: 1.0.0
+  description: |
+    API людей ядра (ADR-80): вход, профиль, файлы, каталог и бланки, кошелёк, факты, ссылки, задачи, панель админа.
+    Им пользуются экран подразделения, лик и панель админа. Договор — единственное описание адресов: тест ядра
+    сверяет адреса кода с договором и каждый ответ e2e-тестов — со схемой (internal/core/httpapi/people_contract_test.go).
+    Внутри старшей версии только добавляем: новое поле, новый адрес, новый код ответа — младшая версия растёт;
+    переименование или удаление — новая старшая версия. Клиент из договора — pkg/sdk/ts (ADR-81).
+    Ошибка — {error: {code, message}}; отказ по правилам ядра — {report: {verdict, user_message, …}} (реестр кодов 5.10).
+servers:
+  - url: /
+security:
+  - accessToken: []
+tags:
+  - { name: auth, description: Вход, регистрация, внешние аккаунты (ADR-44, ADR-58) }
+  - { name: me, description: Профиль человека }
+  - { name: files, description: Файлы человека (ADR-48) }
+  - { name: catalog, description: Каталог, бланки, разметка подразделений, витрина }
+  - { name: wallet, description: Кошелёк, промокоды, метки пополнения }
+  - { name: facts, description: Факты человека, публичные факты, ссылки (ADR-79) }
+  - { name: tasks, description: Задачи и команды (ADR-29) }
+  - { name: admin, description: Панель админа (роль admin) }
+paths:
+  # --- вход -----------------------------------------------------------------------------------------------------------
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+                display_name: { type: string }
+                source: { type: string, description: Метка источника (ADR-75) }
+      responses:
+        "201": { $ref: "#/components/responses/Session" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } }
+      responses:
+        "200": { $ref: "#/components/responses/Session" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refresh
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: Новая пара ключей; прежний ключ обновления больше не действует
+          content:
+            application/json:
+              schema: { type: object, required: [tokens], properties: { tokens: { $ref: "#/components/schemas/Tokens" } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "204": { description: Сессия закрыта }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/auth/providers:
+    get:
+      tags: [auth]
+      operationId: authProviders
+      security: []
+      responses:
+        "200":
+          description: Внешние входы, включённые на сервере
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [providers]
+                properties:
+                  providers: { type: array, items: { $ref: "#/components/schemas/Provider" } }
+  /api/v1/auth/oauth/{provider}/start:
+    get:
+      tags: [auth]
+      operationId: oauthStart
+      security: []
+      parameters:
+        - { $ref: "#/components/parameters/Provider" }
+        - { name: return_to, in: query, schema: { type: string }, description: Куда вернуть человека после входа }
+      responses:
+        "302": { description: Переход к провайдеру }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/auth/oauth/{provider}/callback:
+    get:
+      tags: [auth]
+      operationId: oauthCallback
+      security: []
+      parameters:
+        - { $ref: "#/components/parameters/Provider" }
+      responses:
+        "302": { description: "Назад на return_to: #oauth=<код> или #oauth_error=<причина>" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/auth/oauth/exchange:
+    post:
+      tags: [auth]
+      operationId: oauthExchange
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code], properties: { code: { type: string } } }
+      responses:
+        "200": { $ref: "#/components/responses/Session" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- профиль --------------------------------------------------------------------------------------------------------
+  /api/v1/me:
+    get:
+      tags: [me]
+      operationId: me
+      responses:
+        "200": { $ref: "#/components/responses/Profile" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [me]
+      operationId: updateMe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { display_name: { type: string } } }
+      responses:
+        "200": { $ref: "#/components/responses/Profile" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/me/source:
+    put:
+      tags: [me]
+      operationId: setSource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [source], properties: { source: { type: string } } }
+      responses:
+        "204": { description: Метка источника записана (ADR-75) }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/me/password:
+    post:
+      tags: [me]
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_password]
+              properties: { current_password: { type: string }, new_password: { type: string } }
+      responses:
+        "204": { description: Пароль сменён }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/me/identities:
+    get:
+      tags: [me]
+      operationId: identities
+      responses:
+        "200":
+          description: Привязанные внешние аккаунты
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdentityList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/me/identities/{provider}/link:
+    post:
+      tags: [me]
+      operationId: linkIdentity
+      parameters:
+        - { $ref: "#/components/parameters/Provider" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { return_to: { type: string } } }
+      responses:
+        "200":
+          description: Куда отправить браузер, чтобы привязать аккаунт
+          content:
+            application/json:
+              schema: { type: object, required: [url], properties: { url: { type: string } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/me/identities/{provider}/{subject}:
+    delete:
+      tags: [me]
+      operationId: unlinkIdentity
+      parameters:
+        - { $ref: "#/components/parameters/Provider" }
+        - { name: subject, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Аккаунт отвязан }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/features:
+    get:
+      tags: [me]
+      operationId: features
+      security: []
+      responses:
+        "200":
+          description: Что включено на сервере
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Features" }
+
+  # --- файлы ----------------------------------------------------------------------------------------------------------
+  /api/v1/files:
+    post:
+      tags: [files]
+      operationId: uploadFile
+      parameters:
+        - { name: filename, in: query, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          image/*: { schema: { type: string, format: binary } }
+      responses:
+        "201": { $ref: "#/components/responses/FileView" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/files/{id}:
+    get:
+      tags: [files]
+      operationId: getFile
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "200": { $ref: "#/components/responses/FileView" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [files]
+      operationId: deleteFile
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "204": { description: Файл удалён }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/files/{id}/content:
+    get:
+      tags: [files]
+      operationId: fileContent
+      security: []
+      parameters:
+        - { $ref: "#/components/parameters/ID" }
+        - { name: token, in: query, schema: { type: string }, description: Подпись ссылки (ADR-48) }
+      responses:
+        "200": { description: Содержимое файла, content: { image/*: { schema: { type: string, format: binary } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- каталог, бланки, разметка, витрина -----------------------------------------------------------------------------
+  /api/v1/catalog:
+    get:
+      tags: [catalog]
+      operationId: catalog
+      security: []
+      responses:
+        "200":
+          description: Бланки задач и фактов, которые можно заказать
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/CatalogItem" } } }
+  /api/v1/forms/{form_id}:
+    get:
+      tags: [catalog]
+      operationId: template
+      security: []
+      parameters:
+        - { name: form_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Бланк — системная часть и разметка полей
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/views:
+    get:
+      tags: [catalog]
+      operationId: views
+      security: []
+      responses:
+        "200":
+          description: Разметка кабинета подразделений (ADR-72)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/ServiceViews" } } }
+  /api/v1/showcase:
+    get:
+      tags: [catalog]
+      operationId: showcase
+      security: []
+      parameters:
+        - { name: lang, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Витрина на языке посетителя (ADR-74)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShowcaseList" }
+
+  # --- кошелёк --------------------------------------------------------------------------------------------------------
+  /api/v1/wallets:
+    get:
+      tags: [wallet]
+      operationId: wallets
+      responses:
+        "200":
+          description: Кошельки человека
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/Wallet" } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/wallets/transactions:
+    get:
+      tags: [wallet]
+      operationId: transactions
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Offset" }]
+      responses:
+        "200":
+          description: История движения GC
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/Transaction" } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/deposits/demo:
+    post:
+      tags: [wallet]
+      operationId: demoDeposit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [amount], properties: { amount: { $ref: "#/components/schemas/Decimal" } } }
+      responses:
+        "200":
+          description: Демо-пополнение (если включено на сервере)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Wallet" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/promo-codes/redeem:
+    post:
+      tags: [wallet]
+      operationId: redeemPromo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code], properties: { code: { type: string } } }
+      responses:
+        "200":
+          description: Промокод зачислен (повтор — already_redeemed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Redeemed" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/topup-marks:
+    post:
+      tags: [wallet]
+      operationId: topupMark
+      responses:
+        "201":
+          description: Метка «Пополнить» для страницы оплаты (ADR-62)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mark, expires_at]
+                properties: { mark: { type: string }, expires_at: { type: string, format: date-time } }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- факты ----------------------------------------------------------------------------------------------------------
+  /api/v1/facts:
+    post:
+      tags: [facts]
+      operationId: createFact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [form_id, values]
+              properties: { form_id: { type: string }, values: { $ref: "#/components/schemas/Values" } }
+      responses:
+        "201": { $ref: "#/components/responses/Fact" }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [facts]
+      operationId: listFacts
+      parameters:
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: fields, in: query, schema: { type: string }, description: "Поля опубликованной версии в summary, через запятую (до 20)" }
+        - { name: live, in: query, schema: { type: string, enum: ["true", "false"] }, description: Без удалённых }
+      responses:
+        "200":
+          description: Факты человека
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/FactListItem" } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/facts/{id}:
+    get:
+      tags: [facts]
+      operationId: getFact
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "200": { $ref: "#/components/responses/Fact" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [facts]
+      operationId: updateFact
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [values], properties: { values: { $ref: "#/components/schemas/Values" } } }
+      responses:
+        "200": { $ref: "#/components/responses/Fact" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [facts]
+      operationId: deleteFact
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "204": { description: Факт удалён }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/facts/{id}/publish:
+    post:
+      tags: [facts]
+      operationId: publishFact
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { version: { type: integer } } }
+      responses:
+        "200": { $ref: "#/components/responses/Fact" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/facts/{id}/shares:
+    post:
+      tags: [facts]
+      operationId: createShare
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { version: { type: integer } } }
+      responses:
+        "201":
+          description: Ссылка на версию факта
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShareCreated" }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [facts]
+      operationId: listShares
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "200":
+          description: Ссылки на факт
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/Share" } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/shares/{id}:
+    delete:
+      tags: [facts]
+      operationId: revokeShare
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "204": { description: Ссылка отозвана }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/shared/{token}:
+    get:
+      tags: [facts]
+      operationId: shared
+      security: []
+      parameters: [{ $ref: "#/components/parameters/Token" }]
+      responses:
+        "200":
+          description: Чем поделились — без входа
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shared" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/shared/{token}/copy:
+    post:
+      tags: [facts]
+      operationId: copyShared
+      parameters: [{ $ref: "#/components/parameters/Token" }]
+      responses:
+        "201": { $ref: "#/components/responses/Fact" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/public/facts:
+    get:
+      tags: [facts]
+      operationId: publicFacts
+      parameters:
+        - { name: kind, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Публичные факты (ADR-79)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/PublicFact" } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- задачи ---------------------------------------------------------------------------------------------------------
+  /api/v1/tasks:
+    post:
+      tags: [tasks]
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [form_id, values]
+              properties:
+                form_id: { type: string }
+                values: { $ref: "#/components/schemas/Values" }
+                idempotency_key: { type: string }
+                group_id: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/Task" }
+        "201": { $ref: "#/components/responses/Task" }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      parameters:
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Offset" }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Задачи человека
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Task" } }
+                  total: { type: integer }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/tasks/{id}:
+    get:
+      tags: [tasks]
+      operationId: getTask
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "200": { $ref: "#/components/responses/Task" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/tasks/{id}/commands:
+    post:
+      tags: [tasks]
+      operationId: command
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties: { command: { type: string, enum: [cancel, retry] }, idempotency_key: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/Task" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/ws:
+    get:
+      tags: [tasks]
+      operationId: realtime
+      parameters:
+        - { name: access_token, in: query, schema: { type: string }, description: Ключ входа — браузер не ставит заголовки на WebSocket }
+      responses:
+        "101": { description: "WebSocket: события contracts/events/realtime_events.schema.json" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --- панель админа --------------------------------------------------------------------------------------------------
+  /api/v1/admin/showcase:
+    get:
+      tags: [admin]
+      operationId: adminShowcase
+      parameters: [{ name: lang, in: query, schema: { type: string } }]
+      responses:
+        "200":
+          description: Витрина для админа
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShowcaseList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      operationId: adminAddShowcase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fact_id]
+              properties: { fact_id: { type: string, format: uuid }, language: { type: string }, position: { type: integer } }
+      responses:
+        "201":
+          description: Факт на витрине
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShowcaseItem" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/showcase/{id}:
+    delete:
+      tags: [admin]
+      operationId: adminRemoveShowcase
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "204": { description: Убрано с витрины }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/facts/{id}/visibility:
+    put:
+      tags: [admin]
+      operationId: adminSetVisibility
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [visibility], properties: { visibility: { type: string, enum: [private, public] } } }
+      responses:
+        "200": { $ref: "#/components/responses/Fact" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/services:
+    get:
+      tags: [admin]
+      operationId: adminServices
+      responses:
+        "200":
+          description: Подразделения, их бланки и учёт
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminService" } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/services/{service}:
+    put:
+      tags: [admin]
+      operationId: adminSetService
+      parameters: [{ $ref: "#/components/parameters/Service" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { enabled: { type: boolean } } }
+      responses:
+        "204": { description: Подразделение включено или выключено }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/services/{service}/facts:
+    get:
+      tags: [admin]
+      operationId: adminFacts
+      parameters:
+        - { $ref: "#/components/parameters/Service" }
+        - { name: form_id, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200":
+          description: Служебные факты подразделения
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/ServiceFact" } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      operationId: adminWriteFact
+      parameters: [{ $ref: "#/components/parameters/Service" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [form_id, values]
+              properties: { form_id: { type: string }, values: { $ref: "#/components/schemas/Values" } }
+      responses:
+        "201":
+          description: Служебный факт записан
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceFact" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/services/{service}/prorabs:
+    get:
+      tags: [admin]
+      operationId: adminProrabs
+      parameters: [{ $ref: "#/components/parameters/Service" }]
+      responses:
+        "200": { $ref: "#/components/responses/Prorabs" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [admin]
+      operationId: adminSetProrab
+      parameters: [{ $ref: "#/components/parameters/Service" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prorab, form_id, priority]
+              properties: { prorab: { type: string }, form_id: { type: string }, priority: { type: integer } }
+      responses:
+        "200": { $ref: "#/components/responses/Prorabs" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/settings:
+    get:
+      tags: [admin]
+      operationId: adminSettings
+      responses:
+        "200":
+          description: Настройки сервера, которые можно показать админу
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/export:
+    get:
+      tags: [admin]
+      operationId: adminExport
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Выгрузка за период, content: { application/zip: { schema: { type: string, format: binary } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/tariffs:
+    get:
+      tags: [admin]
+      operationId: adminTariffs
+      responses:
+        "200": { $ref: "#/components/responses/Tariffs" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [admin]
+      operationId: adminSetTariff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope, target]
+              properties:
+                scope: { type: string }
+                target: { type: string }
+                value: { oneOf: [{ $ref: "#/components/schemas/Decimal" }, { type: "null" }], description: "null — вернуть цену паспорта" }
+      responses:
+        "200": { $ref: "#/components/responses/Tariffs" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/admin/departments/keys:
+    post:
+      tags: [admin]
+      operationId: adminDepartmentKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code, name], properties: { code: { type: string }, name: { type: string } } }
+      responses:
+        "201":
+          description: Ключ подразделения — показывается один раз (ADR-70)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, name, key]
+                properties: { code: { type: string }, name: { type: string }, key: { type: string } }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [admin]
+      operationId: adminDepartmentKeys
+      responses:
+        "200":
+          description: Выданные ключи подразделений (без самих ключей)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties: { items: { type: array, items: { $ref: "#/components/schemas/DepartmentKey" } } }
+        default: { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    accessToken: { type: http, scheme: bearer, description: Ключ входа человека (access JWT, ADR-44) }
+  parameters:
+    ID: { name: id, in: path, required: true, schema: { type: string } }
+    Token: { name: token, in: path, required: true, schema: { type: string } }
+    Provider: { name: provider, in: path, required: true, schema: { type: string } }
+    Service: { name: service, in: path, required: true, schema: { type: string } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+    Offset: { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+  responses:
+    Error:
+      description: Ошибка или отказ по правилам ядра
+      content:
+        application/json:
+          schema: { oneOf: [{ $ref: "#/components/schemas/Error" }, { $ref: "#/components/schemas/Refusal" }] }
+    Session:
+      description: Вход выполнен — ключи и номер человека
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [user_id, tokens]
+            properties: { user_id: { type: string, format: uuid }, tokens: { $ref: "#/components/schemas/Tokens" } }
+    Profile:
+      description: Профиль человека
+      content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } }
+    FileView:
+      description: Файл и подписанная ссылка на содержимое
+      content: { application/json: { schema: { $ref: "#/components/schemas/FileView" } } }
+    Fact:
+      description: Факт со всеми версиями
+      content: { application/json: { schema: { $ref: "#/components/schemas/Fact" } } }
+    Task:
+      description: Задача — конверт ядра
+      content: { application/json: { schema: { $ref: "#/components/schemas/Task" } } }
+    Prorabs:
+      description: Прорабы подразделения и их приоритет на бланки (ADR-76)
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [items]
+            properties: { items: { type: array, items: { $ref: "#/components/schemas/Prorab" } } }
+    Tariffs:
+      description: Цены, ставки, коэффициенты и история правок (ADR-78)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Tariffs" } } }
+  schemas:
+    Decimal: { type: string, pattern: "^-?[0-9]+(\\.[0-9]+)?$", description: Число строкой — деньги без потери точности }
+    Values: { type: object, additionalProperties: true, description: Значения бланка — по его fields_rules }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties: { code: { type: string }, message: { type: string } }
+    Refusal:
+      type: object
+      required: [report]
+      properties:
+        report:
+          type: object
+          required: [verdict, user_message]
+          properties:
+            verdict: { type: string, description: Код реестра (5.10) }
+            user_message: { type: string }
+            admin_message: { type: string }
+            field_errors: { type: array, items: { type: object, additionalProperties: true } }
+    RefreshRequest: { type: object, required: [refresh_token], properties: { refresh_token: { type: string } } }
+    Tokens:
+      type: object
+      required: [access_token, refresh_token, expires_in, token_type]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in: { type: integer }
+        token_type: { type: string }
+    Provider: { type: object, required: [id, name], properties: { id: { type: string }, name: { type: string } } }
+    Profile:
+      type: object
+      required: [user_id, email, display_name, has_password, role, created_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string }
+        display_name: { type: string }
+        has_password: { type: boolean }
+        role: { type: string, enum: [user, tester, admin] }
+        created_at: { type: string, format: date-time }
+    Identity:
+      type: object
+      required: [provider, subject, display_name, created_at]
+      properties:
+        provider: { type: string }
+        subject: { type: string }
+        email: { type: string }
+        display_name: { type: string }
+        created_at: { type: string, format: date-time }
+        last_login_at: { type: string, format: date-time }
+    IdentityList: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Identity" } } } }
+    Features:
+      type: object
+      required: [demo_deposit, files]
+      properties: { demo_deposit: { type: boolean }, files: { type: boolean } }
+      additionalProperties: { type: boolean }
+    FileView:
+      type: object
+      required: [file, link]
+      properties:
+        file:
+          type: object
+          required: [file_id, filename, mime, size, created_at]
+          properties:
+            file_id: { type: string, format: uuid }
+            filename: { type: string }
+            mime: { type: string }
+            size: { type: integer }
+            width: { type: integer }
+            height: { type: integer }
+            created_at: { type: string, format: date-time }
+        link: { $ref: "#/components/schemas/Link" }
+    Link: { type: object, required: [url, expires_at], properties: { url: { type: string }, expires_at: { type: string, format: date-time } } }
+    CatalogItem:
+      type: object
+      required: [form_id, kind, title, service, price, currency_id, schema_version]
+      properties:
+        form_id: { type: string }
+        kind: { type: string, enum: [task, fact] }
+        title: { type: string }
+        category: { type: string }
+        service: { type: string }
+        price: { $ref: "#/components/schemas/Decimal" }
+        currency_id: { type: string }
+        schema_version: { type: integer }
+    Template:
+      type: object
+      required: [system, meta_ui]
+      properties:
+        system:
+          type: object
+          required: [form_id, kind, target_service, schema_version, price, currency_id]
+          properties:
+            form_id: { type: string }
+            kind: { type: string }
+            target_service: { type: string }
+            schema_version: { type: integer }
+            price: { $ref: "#/components/schemas/Decimal" }
+            currency_id: { type: string }
+        meta_ui: { $ref: "#/components/schemas/MetaUI" }
+    MetaUI:
+      type: object
+      required: [title, fields_rules]
+      properties:
+        title: { type: string }
+        category: { type: string }
+        price_gc: { type: number }
+        fields_rules: { type: object, additionalProperties: { type: object, additionalProperties: true }, description: Правила полей бланка }
+    ServiceViews:
+      type: object
+      required: [service, views]
+      properties:
+        service: { type: string }
+        title: { type: string }
+        views: { type: array, items: { $ref: "#/components/schemas/View" } }
+    View:
+      type: object
+      required: [id, kind]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        title: { type: string }
+        form: { type: string }
+        card: { type: string }
+        order: { type: string }
+        icon: { type: string }
+        body: { type: array, items: { type: object, additionalProperties: true } }
+        target: { type: object, additionalProperties: true }
+    ShowcaseItem:
+      type: object
+      required: [id, fact_id, kind, language, position, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        fact_id: { type: string, format: uuid }
+        kind: { type: string }
+        language: { type: string }
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+        values: { $ref: "#/components/schemas/Values" }
+    ShowcaseList: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/ShowcaseItem" } } } }
+    Wallet:
+      type: object
+      required: [wallet_id, currency_id, balance, reserved, available]
+      properties:
+        wallet_id: { type: string, format: uuid }
+        currency_id: { type: string }
+        balance: { $ref: "#/components/schemas/Decimal" }
+        reserved: { $ref: "#/components/schemas/Decimal" }
+        available: { $ref: "#/components/schemas/Decimal" }
+    Transaction:
+      type: object
+      required: [id, type, amount, created_at]
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        amount: { $ref: "#/components/schemas/Decimal" }
+        task_id: { type: string }
+        form_id: { type: string }
+        source: { type: string }
+        created_at: { type: string, format: date-time }
+    Redeemed:
+      type: object
+      required: [code_id, amount, currency_id, already_redeemed, wallet]
+      properties:
+        code_id: { type: string }
+        amount: { $ref: "#/components/schemas/Decimal" }
+        currency_id: { type: string }
+        already_redeemed: { type: boolean }
+        user_source: { type: string }
+        wallet: { $ref: "#/components/schemas/Wallet" }
+    FactVersion:
+      type: object
+      required: [version, schema_version, status, values, created_at]
+      properties:
+        version: { type: integer }
+        schema_version: { type: integer }
+        status: { type: string }
+        values: { $ref: "#/components/schemas/Values" }
+        created_at: { type: string, format: date-time }
+    Fact:
+      type: object
+      required: [fact_id, kind, origin, visibility, versions]
+      properties:
+        fact_id: { type: string, format: uuid }
+        kind: { type: string }
+        origin: { type: string }
+        visibility: { type: string, enum: [private, public] }
+        published_version: { type: [integer, "null"] }
+        versions: { type: array, items: { $ref: "#/components/schemas/FactVersion" } }
+    FactListItem:
+      type: object
+      required: [fact_id, kind, origin, visibility, status, created_at]
+      properties:
+        fact_id: { type: string, format: uuid }
+        kind: { type: string }
+        origin: { type: string }
+        visibility: { type: string, enum: [private, public] }
+        status: { type: string }
+        published_version: { type: [integer, "null"] }
+        created_at: { type: string, format: date-time }
+        summary: { type: object, additionalProperties: true, description: "Поля из ?fields=" }
+        versions: { type: array, items: { type: object, additionalProperties: true } }
+    PublicFact:
+      type: object
+      required: [fact_id, kind, version, values, updated_at]
+      properties:
+        fact_id: { type: string, format: uuid }
+        kind: { type: string }
+        version: { type: integer }
+        values: { $ref: "#/components/schemas/Values" }
+        updated_at: { type: string, format: date-time }
+    ShareCreated:
+      type: object
+      required: [share_id, fact_id, version, token, path, created_at]
+      properties:
+        share_id: { type: string, format: uuid }
+        fact_id: { type: string, format: uuid }
+        version: { type: integer }
+        token: { type: string }
+        path: { type: string }
+        created_at: { type: string, format: date-time }
+    Share:
+      type: object
+      required: [share_id, fact_id, version, created_at]
+      properties:
+        share_id: { type: string, format: uuid }
+        fact_id: { type: string, format: uuid }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+    Shared:
+      type: object
+      required: [kind, title, version, values, created_at]
+      properties:
+        kind: { type: string }
+        title: { type: string }
+        version: { type: integer }
+        values: { $ref: "#/components/schemas/Values" }
+        files: { type: object, additionalProperties: { $ref: "#/components/schemas/Link" } }
+        created_at: { type: string, format: date-time }
+    Task:
+      type: object
+      required: [system, values, meta_ui, commands]
+      properties:
+        system:
+          type: object
+          required: [document_id, form_id, kind, target_service, schema_version, status, owner_id, attempts, idempotency_key, created_at, updated_at]
+          properties:
+            document_id: { type: string, format: uuid }
+            form_id: { type: string }
+            kind: { type: string }
+            target_service: { type: string }
+            schema_version: { type: integer }
+            status: { type: string }
+            owner_id: { type: string, format: uuid }
+            attempts: { type: integer }
+            idempotency_key: { type: string }
+            locked_by: { type: [string, "null"] }
+            locked_until: { type: [string, "null"], format: date-time }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+        values: { $ref: "#/components/schemas/Values" }
+        meta_ui: { $ref: "#/components/schemas/MetaUI" }
+        commands:
+          type: object
+          additionalProperties: { type: object, required: [status], properties: { status: { type: string } } }
+          description: Команды и доступны ли они сейчас (cancel, retry)
+        report: { type: [object, "null"], additionalProperties: true, description: "Итог: verdict, user_message, result_fact, worker_charge…" }
+        result: { type: object, additionalProperties: true }
+    AdminService:
+      type: object
+      required: [code, title, enabled, module_id, module_version, forms]
+      properties:
+        code: { type: string }
+        title: { type: string }
+        enabled: { type: boolean }
+        module_id: { type: string }
+        module_version: { type: string }
+        accounting: { type: object, additionalProperties: true }
+        forms:
+          type: array
+          items:
+            type: object
+            required: [form_id, kind, title, version, price]
+            properties:
+              form_id: { type: string }
+              kind: { type: string }
+              title: { type: string }
+              version: { type: integer }
+              audience: { type: string }
+              price: { $ref: "#/components/schemas/Decimal" }
+              fields: { type: object, additionalProperties: true }
+    ServiceFact:
+      type: object
+      required: [id, service, form_id, values, writer, audience, schema_version, created_at]
+      properties:
+        id: { type: integer }
+        service: { type: string }
+        form_id: { type: string }
+        values: { $ref: "#/components/schemas/Values" }
+        writer: { type: string }
+        audience: { type: string }
+        schema_version: { type: integer }
+        task_id: { type: [string, "null"] }
+        user_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    Prorab:
+      type: object
+      required: [prorab, form_id, priority, explicit, title, description]
+      properties:
+        prorab: { type: string }
+        form_id: { type: string }
+        priority: { type: integer }
+        explicit: { type: boolean }
+        title: { type: string }
+        description: { type: string }
+        last_seen_at: { type: [string, "null"], format: date-time }
+    Tariffs:
+      type: object
+      required: [forms, units, multipliers, overdraft_factor, history]
+      properties:
+        forms:
+          type: array
+          items:
+            type: object
+            required: [service, form_id, title, price, manifest_price, override]
+            properties:
+              service: { type: string }
+              form_id: { type: string }
+              title: { type: string }
+              price: { $ref: "#/components/schemas/Decimal" }
+              manifest_price: { $ref: "#/components/schemas/Decimal" }
+              override: { type: boolean }
+        units:
+          type: array
+          items:
+            type: object
+            required: [service, unit, rate, manifest_rate, base, override]
+            properties:
+              service: { type: string }
+              unit: { type: string }
+              rate: { $ref: "#/components/schemas/Decimal" }
+              manifest_rate: { $ref: "#/components/schemas/Decimal" }
+              base: { type: boolean }
+              override: { type: boolean }
+        multipliers:
+          type: array
+          items:
+            type: object
+            required: [target, title, value, override]
+            properties:
+              target: { type: string }
+              title: { type: string }
+              value: { $ref: "#/components/schemas/Decimal" }
+              override: { type: boolean }
+        overdraft_factor:
+          type: object
+          required: [value, config, override]
+          properties: { value: { $ref: "#/components/schemas/Decimal" }, config: { $ref: "#/components/schemas/Decimal" }, override: { type: boolean } }
+        history:
+          type: array
+          items:
+            type: object
+            required: [scope, target, writer, created_at]
+            properties:
+              scope: { type: string }
+              target: { type: string }
+              value: { type: [string, "null"] }
+              writer: { type: string }
+              created_at: { type: string, format: date-time }
+    DepartmentKey:
+      type: object
+      required: [code, name, title, connected, created_at]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        title: { type: string }
+        connected: { type: boolean }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: [string, "null"], format: date-time }

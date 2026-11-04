@@ -108,7 +108,7 @@ func newStack(t *testing.T) *stack {
 		t.Fatal(err)
 	}
 	authSvc := auth.New(pool, cfg.JWTSecret, cfg.AccessTTL, cfg.RefreshTTL).WithOAuth(providers)
-	srv := httptest.NewServer(New(eng, authSvc, hub, log).WithFileLinks(files.NewSigner(cfg.JWTSecret), cfg.FileLinkTTL).Handler())
+	srv := httptest.NewServer(contractCheck(t, New(eng, authSvc, hub, log).WithFileLinks(files.NewSigner(cfg.JWTSecret), cfg.FileLinkTTL).Handler()))
 	t.Cleanup(func() { cancel(); srv.Close() })
 	return &stack{t: t, srv: srv, v: v, prorab: token, issuer: issuer, idp: idp, pool: pool, cleanup: cancel}
 }
