@@ -47,7 +47,8 @@ test("server field errors land on their fields accessibly", () => {
 });
 
 const envelope = (report: Envelope["report"], result: Record<string, unknown>): Envelope => ({
-  system: { document_id: "t", form_id: "f", schema_version: 1, kind: "task", status: "completed", created_at: "" },
+  system: { document_id: "t", form_id: "f", schema_version: 1, kind: "task", status: "completed", created_at: "", updated_at: "",
+    target_service: "s", owner_id: "u", attempts: 1, idempotency_key: "k" },
   meta_ui: { title: "t", fields_rules: {} }, commands: {}, values: {}, report, result,
 });
 

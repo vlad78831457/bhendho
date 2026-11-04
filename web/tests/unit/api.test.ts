@@ -50,7 +50,11 @@ test("core refusals surface the registry code and field errors", async () => {
 });
 
 test("task submission sends only form_id, values and idempotency_key (ADR-12)", async () => {
-  const f = vi.fn(async () => json(201, { system: { document_id: "t" } }));
+  const f = vi.fn(async () => json(201, {
+    system: { document_id: "t", form_id: "x.v1", kind: "task", target_service: "x", schema_version: 1, status: "pending", owner_id: "u",
+      attempts: 0, idempotency_key: "key-1", created_at: "", updated_at: "" },
+    values: { a: 1 }, meta_ui: { title: "x", fields_rules: {} }, commands: {}, report: null,
+  }));
   await new Api("", f as unknown as typeof fetch).createTask("x.v1", { a: 1 }, "key-1");
   const body = JSON.parse((f.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
   expect(body).toEqual({ form_id: "x.v1", values: { a: 1 }, idempotency_key: "key-1" });

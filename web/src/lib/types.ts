@@ -1,3 +1,5 @@
+import type { Schemas } from "../offgrid";
+
 // Типы контракта ядра (contracts/manifests/blank_envelope_schema.json, 5.7 спеки).
 // Фронт не знает предметной области: только конверт, правила полей и общие секции отчёта.
 
@@ -48,124 +50,66 @@ export interface Report {
   [k: string]: unknown;
 }
 
-export interface Envelope {
-  system: {
-    document_id: string;
-    form_id: string;
-    schema_version: number;
-    kind: "task" | "fact";
-    status: TaskStatus;
-    created_at: string;
-    updated_at?: string;
-    attempts?: number;
-    target_service?: string;
-  };
+/** Задача — конверт ядра по договору; статус, правила полей и отчёт — точными типами панели (договор их держит открытыми). */
+export type Envelope = Omit<Schemas["Task"], "system" | "meta_ui" | "report" | "commands"> & {
+  system: Omit<Schemas["Task"]["system"], "status" | "kind"> & { status: TaskStatus; kind: "task" | "fact" };
   meta_ui: MetaUI;
   commands: Record<string, { status: string; label?: string; reason?: string }>;
-  values: Record<string, unknown>;
   report: Report | null;
-  result?: Record<string, unknown>;
-}
+};
 
-export interface CatalogItem {
-  form_id: string;
-  schema_version: number;
-  kind: "task" | "fact";
-  title: string;
-  service?: string;
-  price: string;
-  currency_id: string;
-  category?: string;
-}
-
-export interface Template {
-  system: { form_id: string; schema_version: number; kind: "task" | "fact"; target_service: string; price: string };
+/** Бланк по договору; правила полей — точным типом панели. */
+export type Template = Omit<Schemas["Template"], "system" | "meta_ui"> & {
+  system: Omit<Schemas["Template"]["system"], "kind"> & { kind: "task" | "fact" };
   meta_ui: MetaUI;
+};
+
+/** Правила полей договор держит открытыми (их задаёт бланк, не ядро) — здесь они получают точный тип панели. */
+function metaUI(m: Schemas["MetaUI"]): MetaUI {
+  return { ...m, fields_rules: m.fields_rules as unknown as Rules };
 }
 
-export interface FactVersion {
-  version: number;
-  status: string;
-  schema_version: number;
-  values: Record<string, unknown>;
-  created_at: string;
+/** Ответ ядра → конверт панели: каждое поле договора на месте, открытые части — точными типами. */
+export function asEnvelope(t: Schemas["Task"]): Envelope {
+  return {
+    ...t,
+    system: { ...t.system, status: t.system.status as TaskStatus, kind: t.system.kind as "task" | "fact" },
+    meta_ui: metaUI(t.meta_ui),
+    report: (t.report ?? null) as Report | null,
+  };
 }
 
-export interface Fact {
-  fact_id: string;
-  kind: string;
-  origin: string;
-  published_version: number | null;
-  /** private — ссылается только хозяин; public — любой (ADR-79). */
-  visibility?: "private" | "public";
-  versions: FactVersion[];
-  /** Только в списке: статус последней версии, создан, поля опубликованной версии (?fields=). */
-  status?: string;
-  created_at?: string;
-  summary?: Record<string, unknown>;
+export function asTemplate(t: Schemas["Template"]): Template {
+  return { ...t, system: { ...t.system, kind: t.system.kind as "task" | "fact" }, meta_ui: metaUI(t.meta_ui) };
 }
 
-export interface Wallet {
-  wallet_id: string;
-  currency_id: string;
-  balance: string;
-  reserved: string;
-  available: string;
-}
+// --- Типы адресов API людей — из договора ядра (ADR-80, ADR-81): правку в ядре без правки здесь покажет tsc. ---
+// Где договор нарочно открыт (правила полей, отчёт, значения бланка), панель держит свои точные типы выше.
 
-export interface Transaction {
-  id: number;
-  type: string;
-  amount: string;
-  task_id?: string;
-  form_id?: string;
-  /** Откуда пополнение: demo, promo:<эмитент>. */
-  source?: string;
-  created_at: string;
-}
-
-export interface Profile {
-  user_id: string;
-  email: string;
-  display_name: string;
-  has_password: boolean;
-  /** user | tester | admin — ставится только на сервере (ADR-61). */
-  role?: string;
-  created_at: string;
-}
-
+export type CatalogItem = Schemas["CatalogItem"];
+export type FactVersion = Schemas["FactVersion"];
+/** Факт; в списке — ещё статус последней версии, дата и поля опубликованной версии (?fields=). */
+export type Fact = Schemas["Fact"] & Partial<Pick<Schemas["FactListItem"], "status" | "created_at" | "summary">>;
+export type Wallet = Schemas["Wallet"];
+export type Transaction = Schemas["Transaction"];
+export type Profile = Schemas["Profile"];
 /** Внешний аккаунт, через который пользователь входит (Google, VK ID…). */
-export interface Identity {
-  provider: string;
-  subject: string;
-  email?: string;
-  display_name: string;
-  created_at: string;
-  last_login_at?: string;
-}
-
+export type Identity = Schemas["Identity"];
 /** Файл пользователя в ядре (ADR-60). */
-export interface StoredFile {
-  file_id: string;
-  filename: string;
-  mime: string;
-  size: number;
-  width?: number;
-  height?: number;
-  created_at: string;
-}
-
+export type StoredFile = Schemas["FileView"]["file"];
 /** Подписанная ссылка на содержимое файла: без токена, до expires_at. */
-export interface FileLink {
-  url: string;
-  expires_at: string;
-}
-
-export interface Tokens {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-}
+export type FileLink = Schemas["Link"];
+export type Tokens = Schemas["Tokens"];
+/** Тарифы (ADR-69, ADR-78): что админ может поменять, и журнал изменений. */
+export type Tariffs = Schemas["Tariffs"];
+/** Факт подразделения: поля ядра и содержимое, которое ядро не понимает. */
+export type ServiceFact = Schemas["ServiceFact"];
+/** Бланк подразделения в обзоре админа (ADR-66); правила полей — точным типом панели. */
+export type AdminForm = Omit<Schemas["AdminService"]["forms"][number], "fields"> & { fields?: Rules };
+export type AdminService = Omit<Schemas["AdminService"], "forms"> & { forms: AdminForm[] };
+export type Prorab = Schemas["Prorab"];
+export type ShowcaseItem = Schemas["ShowcaseItem"];
+export type DepartmentKey = Schemas["DepartmentKey"];
 
 // Реестр realtime-событий (contracts/events/realtime_events.schema.json).
 export interface RealtimeEvent {
@@ -174,50 +118,4 @@ export interface RealtimeEvent {
   seq: number;
   occurred_at: string;
   payload: Record<string, unknown>;
-}
-
-/** Бланк подразделения в обзоре админа (ADR-66). */
-export interface AdminForm {
-  form_id: string;
-  version: number;
-  kind: "fact" | "task";
-  /** «Кому» (ADR-65): user — пользователю, иначе — память подразделения. */
-  audience: string;
-  title: string;
-  price: string;
-  fields?: Rules;
-}
-
-export interface AdminService {
-  code: string;
-  title: string;
-  module_id: string;
-  module_version: string;
-  enabled: boolean;
-  forms: AdminForm[];
-}
-
-/** Тарифы (ADR-69): что админ может поменять, и журнал изменений. */
-export interface Tariffs {
-  forms: { service: string; form_id: string; title: string; manifest_price: string; price: string; override: boolean }[];
-  units: { service: string; unit: string; base: boolean; manifest_rate: string; rate: string; override: boolean }[];
-  overdraft_factor: { config: string; value: string; override: boolean };
-  /** Коэффициенты цены (ADR-78): core — k GC, <подразделение>, <подразделение>:<прораб>; по умолчанию 1. */
-  multipliers: { target: string; title: string; value: string; override: boolean }[];
-  history: { scope: string; target: string; value: string | null; writer: string; created_at: string }[];
-}
-
-/** Факт подразделения: семь полей ядра и содержимое, которое ядро не понимает. */
-export interface ServiceFact {
-  id: number;
-  service: string;
-  form_id: string;
-  schema_version: number;
-  audience: string;
-  task_id: string | null;
-  user_id: string | null;
-  /** prorab:<имя> или admin:<id> */
-  writer: string;
-  created_at: string;
-  values: Record<string, unknown>;
 }

@@ -90,12 +90,15 @@ services:
   ts-sdk-test:
     build:
       context: pkg/sdk/ts
+      additional_contexts:
+        contracts: ./contracts   # договор API людей — для проверки свежести people.gen.ts (ADR-81)
     profiles: ["test"]
 
   # Фронт движка (ADR-64): tsc + vitest
   web-test:
     build:
-      context: web
+      context: .
+      dockerfile: web/Dockerfile
       target: test
     profiles: ["test"]
 
