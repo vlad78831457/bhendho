@@ -164,3 +164,20 @@ func TestEvents(t *testing.T) {
 		}
 	}
 }
+
+// ADR-83: версия реестра событий — в схеме (const поля v); событие с другой версией реестр не пропускает.
+func TestEventsVersion(t *testing.T) {
+	v := mustLoad(t)
+	want, err := EventsVersion()
+	if err != nil || want == "" {
+		t.Fatalf("версия реестра: %q, %v", want, err)
+	}
+	ev := `{"event_id":"2b0c7a8e-5d4f-4a3b-9c2d-1e0f9a8b7c6d","v":"` + want + `","type":"task.progress","seq":1,` +
+		`"occurred_at":"2026-09-28T10:01:00Z","payload":{"task_id":"t1","percent":30,"phase":"text_ready"}}`
+	if err := v.ValidateEvent([]byte(ev)); err != nil {
+		t.Fatalf("событие с версией: %v", err)
+	}
+	if err := v.ValidateEvent([]byte(strings.Replace(ev, `"v":"`+want+`"`, `"v":"0.0.1"`, 1))); err == nil {
+		t.Fatal("чужая версия реестра должна не пройти")
+	}
+}

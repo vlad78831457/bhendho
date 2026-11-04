@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://r-aaa-core-a.io/schemas/realtime_event.json",
   "title": "RealtimeEvent",
-  "description": "Единый реестр realtime-событий (спека 5.7, FR-IF-4/8, ADR-23, ADR-46). Каждое событие несёт seq — сквозной номер на пользователя; клиент отбрасывает события с seq не больше применённого. task.progress эфемерен (мимо outbox), остальные — at-least-once через outbox.",
+  "description": "Единый реестр realtime-событий (спека 5.7, FR-IF-4/8, ADR-23, ADR-46). Версия реестра — поле v в каждом событии (ADR-83): внутри старшей версии только добавляем, клиент сверяет старшую. Каждое событие несёт seq — сквозной номер на пользователя; клиент отбрасывает события с seq не больше применённого. task.progress эфемерен (мимо outbox), остальные — at-least-once через outbox.",
   "type": "object",
   "required": ["event_id", "type", "seq", "occurred_at", "payload"],
   "properties": {
@@ -12,7 +12,8 @@
     },
     "seq": { "type": "integer", "minimum": 0 },
     "occurred_at": { "type": "string", "format": "date-time" },
-    "payload": { "type": "object" }
+    "payload": { "type": "object" },
+    "v": { "const": "1.1.0", "description": "Версия реестра событий (ADR-83); ядро ставит её в каждое событие" }
   },
   "additionalProperties": false,
   "allOf": [
