@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"offgrid/core/internal/core/contracts"
 	"offgrid/core/internal/core/outbox"
 )
 
@@ -33,11 +34,21 @@ var eventNS = uuid.MustParse("5c0b6f1e-6f8f-4d0e-9d7b-2f1d3f0a9e11")
 // Event — событие на проводе (contracts/events/realtime_events.schema.json).
 type Event struct {
 	EventID    string          `json:"event_id"`
+	V          string          `json:"v"` // версия реестра событий (ADR-83)
 	Type       string          `json:"type"`
 	Seq        int64           `json:"seq"`
 	OccurredAt time.Time       `json:"occurred_at"`
 	Payload    json.RawMessage `json:"payload"`
 }
+
+// eventsVersion — версия реестра событий из его схемы (ADR-83): ставится в каждое событие, клиент сверяет старшую.
+var eventsVersion = func() string {
+	v, err := contracts.EventsVersion()
+	if err != nil {
+		panic(err)
+	}
+	return v
+}()
 
 // Hub — подключённые клиенты этого инстанса.
 type Hub struct {
@@ -78,7 +89,7 @@ func (h *Hub) Progress(ctx context.Context, userID, taskID uuid.UUID, percent in
 	if err := h.pool.QueryRow(ctx, `SELECT COALESCE((SELECT last_seq FROM user_seq WHERE user_id = $1), 0)`, userID).Scan(&seq); err != nil {
 		return err
 	}
-	ev, _ := json.Marshal(Event{EventID: uuid.NewString(), Type: "task.progress", Seq: seq,
+	ev, _ := json.Marshal(Event{EventID: uuid.NewString(), V: eventsVersion, Type: "task.progress", Seq: seq,
 		OccurredAt: time.Now().UTC(), Payload: payload})
 	msg, _ := json.Marshal(map[string]any{"u": userID.String(), "e": json.RawMessage(ev)})
 	_, err := h.pool.Exec(ctx, `SELECT pg_notify($1, $2)`, ProgressChannel, string(msg))
@@ -268,7 +279,7 @@ func (h *Hub) sendSnapshot(ctx context.Context, c *client) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	ev, _ := json.Marshal(Event{EventID: uuid.NewString(), Type: "system.snapshot", Seq: seq,
+	ev, _ := json.Marshal(Event{EventID: uuid.NewString(), V: eventsVersion, Type: "system.snapshot", Seq: seq,
 		OccurredAt: time.Now().UTC(), Payload: payload})
 	return seq, write(ctx, c.conn, ev)
 }
@@ -291,6 +302,7 @@ func (h *Hub) catchUp(ctx context.Context, c *client, last int64) (int64, error)
 			binary.BigEndian.PutUint64(b[:], uint64(id))
 			ev.EventID = uuid.NewSHA1(eventNS, b[:]).String()
 			ev.OccurredAt = ev.OccurredAt.UTC()
+			ev.V = eventsVersion
 			return ev, err
 		})
 		if err != nil {

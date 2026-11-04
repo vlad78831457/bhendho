@@ -4,7 +4,7 @@ package contracts
 
 import "embed"
 
-// FS содержит схемы манифеста, конверта бланка, realtime-событий и примеры.
+// FS содержит схемы манифеста, конверта бланка, realtime-событий, примеры и договоры интерфейсов (OpenAPI).
 //
-//go:embed manifests/*.json events/*.json manifests/examples/*
+//go:embed manifests/*.json events/*.json manifests/examples/* interfaces/*.yaml
 var FS embed.FS
