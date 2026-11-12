@@ -40,7 +40,10 @@ func TestPublicFactsOverHTTP(t *testing.T) {
 		t.Fatalf("visibility: %v", got)
 	}
 
-	s.call("GET", "/api/v1/public/facts", "", nil, http.StatusUnauthorized)
+	// Гостю — тоже (поправка ADR-79, 2026-11-12): главная показывает сказки админа и тем, кто не вошёл.
+	if items := s.call("GET", "/api/v1/public/facts?kind=taleweaver.character.v1", "", nil, http.StatusOK)["items"].([]any); len(items) != 1 {
+		t.Fatalf("guest public list: %v", items)
+	}
 	items := s.call("GET", "/api/v1/public/facts?kind=taleweaver.character.v1", user, nil, http.StatusOK)["items"].([]any)
 	if len(items) != 1 || items[0].(map[string]any)["values"].(map[string]any)["name"] != "Лиса" {
 		t.Fatalf("public list: %v", items)

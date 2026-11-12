@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Server) publicFacts(w http.ResponseWriter, r *http.Request, _ uuid.UUID) {
+func (s *Server) publicFacts(w http.ResponseWriter, r *http.Request) {
 	items, err := s.eng.PublicFacts(r.Context(), r.URL.Query().Get("kind"))
 	if err != nil {
 		s.internal(w, err)
