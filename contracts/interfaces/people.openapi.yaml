@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OFFGRID People API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     API людей ядра (ADR-80): вход, профиль, файлы, каталог и бланки, кошелёк, факты, ссылки, задачи, панель админа.
     Им пользуются экран подразделения, лик и панель админа. Договор — единственное описание адресов: тест ядра
@@ -544,6 +544,7 @@ paths:
     get:
       tags: [facts]
       operationId: publicFacts
+      security: []
       parameters:
         - { name: kind, in: query, schema: { type: string } }
       responses:

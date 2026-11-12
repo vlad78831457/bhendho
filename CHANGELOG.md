@@ -4,6 +4,7 @@
 
 ## Не выпущено
 
+- публичные факты открыты и гостю: `GET /api/v1/public/facts` без входа, как витрина — главная Talewoods показывает сказки админа тем, кто не вошёл; договор API людей 1.1.0 (`security: []`), поправка ADR-79 со словами директора (`task/cd-public-guest`).
 - один клиент API людей: `pkg/sdk/ts/src/people.ts` с типами из договора (`people.gen.ts`, `make people-types`, проверка свежести), панель `web/` — на нём; у витрины `values` в договоре обязательное (ADR-81) (`task/cc-people-client`).
 - версия реестра событий: поле `v` (1.1.0, `const` в схеме реестра) в каждом событии сокета — снимок, догонка, живые; тест реестра и e2e-сокета (ADR-83) (`task/cb-events-version`).
 - версия шлюза задач: ядро отдаёт `X-Core-Gateway` в каждом ответе `/gateway/v1`, прораб с другой старшей версией в `X-Worker-Gateway` — 409 `gateway_version`; Python SDK шлёт и сверяет версию, `VersionMismatchError`, версия SDK = договора (0.3.0); договор шлюза 0.3.0 (ADR-82) (`task/ca-gateway-version`).
